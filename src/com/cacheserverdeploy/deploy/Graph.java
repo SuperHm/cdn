@@ -1,12 +1,8 @@
 package com.cacheserverdeploy.deploy;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.List;
-import java.util.Map;
 
-import com.sun.jndi.url.iiopname.iiopnameURLContextFactory;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 
@@ -19,37 +15,60 @@ import com.sun.jndi.url.iiopname.iiopnameURLContextFactory;
  *
  */
 public class Graph {
-	private  List<Edge> edges;
-	private  List<Client> clients;
+	private Edge[][] edges;
+	private  Client[] clients;
+	private Set<Integer> serverNodes;//服务节点
+	private Set<Integer> clientNodes;//消费节点
+	private Set<Integer> nodes;//所有节点
 	final int serverCost;
 	final int linkNum;
-	final int serverNodesNum;
+	final int nodesNum;
 	final int clientNodesNum;
+	final int serverNodesNum;
+
 	
-	public Graph(int serverNodesNum, int clientNodesNum, int serverCost, int linkNum){
-		edges = new ArrayList<>(linkNum);
-		clients = new ArrayList<>(clientNodesNum);
+	public Graph(int nodesNum, int clientNodesNum, int serverCost, int linkNum){
+		edges = new Edge[nodesNum][nodesNum];
+		clients = new Client[nodesNum];
 		this.serverCost = serverCost;
 		this.linkNum = linkNum;
-		this.serverNodesNum = serverNodesNum;
+		this.nodesNum = nodesNum;
 		this.clientNodesNum = clientNodesNum;
+		this.serverNodesNum = nodesNum-clientNodesNum;
+		this.serverNodes = new HashSet<>(this.serverNodesNum);
+		this.clientNodes = new HashSet<>(this.clientNodesNum);
+		for(int i=0; i<this.nodesNum; i++)
+			nodes.add(i);
 	}
 	
 	
-	public void addEdge(Edge edge){
-		edges.add(edge);
+	public void addEdge(int src, int des, Edge edge){
+		edges[src][des] = edge;
 	}
 	
-	public void addClient(Client client){
-		clients.add(client);
+	public void addClient(int node, Client client){
+		clients[node] = client;
 	}
 	
-	public List<Edge> getEdges(){
+	public Edge[][] getEdges(){
 		return edges;
 	}
 	
-	public List<Client> getClients(){
+	public Client[] getClients(){
 		return clients;
+	}
+	
+	public Set<Integer> getServerNodes(){
+		return serverNodes;
+	}
+	
+	public void addClientNode(int node){
+		clientNodes.add(node);
+	}
+	
+	public void setServerNodes(){
+		serverNodes.addAll(nodes);
+		serverNodes.removeAll(clientNodes);
 	}
 	
 	static class Edge{

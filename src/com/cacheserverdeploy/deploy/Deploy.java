@@ -1,8 +1,16 @@
 package com.cacheserverdeploy.deploy;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.Stack;
+
+import com.cacheserverdeploy.deploy.Graph.Edge;
 
 public class Deploy{
 	private static int lineNum = 0;
+	final static int MAX_VALUE = 100000;
     /**
      * 你需要完成的入口
      * <功能详细描述>
@@ -15,6 +23,7 @@ public class Deploy{
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
+    	graph.setServerNodes();
     	
         return new String[]{"17","\r\n","0 8 0 20"};
     }
@@ -52,10 +61,8 @@ public class Deploy{
     				Integer.parseInt(lineStrs[1]),//终止节点
     				Integer.parseInt(lineStrs[2]), //链路总带宽
     				Integer.parseInt(lineStrs[3]));//单位带宽租用费用
-    		graph.addEdge(edge);
+    		graph.addEdge(edge.srcNode, edge.desNode, edge);
     	}
-    	if(graph.getEdges().size() != graph.linkNum)
-    		System.err.println("Expected link number not equal linkNum");
     }
     
     /**
@@ -72,10 +79,33 @@ public class Deploy{
     		Graph.Client client = new Graph.Client(Integer.parseInt(lineStrs[0]),//消费节点
     				Integer.parseInt(lineStrs[1]), //相邻的网络节点
     				Integer.parseInt(lineStrs[2]));//带宽需求
-    		graph.addClient(client);
+    		graph.addClient(client.node, client);
+    		graph.addClientNode(client.node);
     	}
-    	if(graph.getClients().size() != graph.clientNodesNum)
-    		System.err.println("Expected clients number not equal clientNodesNum");
+    }
+    
+    
+    public static void shortestPath(Graph graph, int src, int des){
+    	Stack<Integer> shortPath = new Stack<>();
+    	Stack<Integer> visitedNodes = new Stack<>();
+    	visitedNodes.push(src);
+    	int visitedNode = src;
+    	Edge[][] edges = graph.getEdges();
+    	while(visitedNode != des){
+    		int minDis = MAX_VALUE;
+    		int index = 0;
+    		for(int i=0; i<edges[src].length; i++){
+    			if(edges[src][i] != null){
+    				if(edges[src][i].unitCost<minDis){
+    					minDis = edges[src][i].unitCost;
+    					index = i;
+    				}
+    			}
+    		}
+    		
+    		
+    		
+    	}
     }
 
 }
