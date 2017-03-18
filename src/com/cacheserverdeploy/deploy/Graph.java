@@ -19,26 +19,25 @@ public class Graph {
 	private  Client[] clients;
 	private Set<Integer> serverNodes;//服务节点
 	private Set<Integer> clientNodes;//消费节点
-	private Set<Integer> nodes;//所有节点
 	final int serverCost;
 	final int linkNum;
-	final int nodesNum;
 	final int clientNodesNum;
 	final int serverNodesNum;
 
 	
-	public Graph(int nodesNum, int clientNodesNum, int serverCost, int linkNum){
-		edges = new Edge[nodesNum][nodesNum];
-		clients = new Client[nodesNum];
+	public Graph(int serverNodesNum, int clientNodesNum, int serverCost, int linkNum){
+		edges = new Edge[serverNodesNum][serverNodesNum];
+		clients = new Client[clientNodesNum];
 		this.serverCost = serverCost;
 		this.linkNum = linkNum;
-		this.nodesNum = nodesNum;
 		this.clientNodesNum = clientNodesNum;
-		this.serverNodesNum = nodesNum-clientNodesNum;
+		this.serverNodesNum = serverNodesNum;
 		this.serverNodes = new HashSet<>(this.serverNodesNum);
 		this.clientNodes = new HashSet<>(this.clientNodesNum);
-		for(int i=0; i<this.nodesNum; i++)
-			nodes.add(i);
+		for(int i=0; i<this.serverNodesNum; i++)
+			serverNodes.add(i);
+		for(int i=0; i<this.clientNodesNum; i++)
+			clientNodes.add(i);
 	}
 	
 	
@@ -61,26 +60,19 @@ public class Graph {
 	public Set<Integer> getServerNodes(){
 		return serverNodes;
 	}
-	
-	public void addClientNode(int node){
-		clientNodes.add(node);
-	}
-	
-	public void setServerNodes(){
-		serverNodes.addAll(nodes);
-		serverNodes.removeAll(clientNodes);
-	}
-	
+
 	static class Edge{
 		int srcNode;
 		int desNode;
 		int bandWidth;
 		int unitCost;
+		int weight;
 		public Edge(int srcNode, int desNode, int bandWidth, int unitCost){
 			this.srcNode = srcNode;
 			this.desNode = desNode;
 			this.bandWidth = bandWidth;
 			this.unitCost = unitCost;
+			this.weight = unitCost;
 		}
 	}
 	
