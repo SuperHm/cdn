@@ -1,6 +1,5 @@
 package com.cacheserverdeploy.deploy;
 
-
 public class Deploy{
 	private static int lineNum = 0;//网络图读取过程中标记行数
 
@@ -12,25 +11,49 @@ public class Deploy{
      * @see [类、类#方法、类#成员]
      */
     public static String[] deployServer(String[] graphContent){
+    	StringBuffer outStrs = new StringBuffer();
         Graph graph = null;
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
-    	int[] selectedServerNodes = graph.selectServerNodes(3);
-    	int[] clientLinkedNodes = graph.getLinkedNodes();
     	
-    	boolean isSatisfied[] = new boolean[graph.clientNodesNum];//标记消费节点带宽需求是否满足
-    	
-    	for(int selectedServerNode: selectedServerNodes){
-    		int[] unitCost = new int[clientLinkedNodes.length];
-    		int[] flow = new int[clientLinkedNodes.length];
-    		String[] shortPath = new String[clientLinkedNodes.length];
-    		graph.dijkstra(selectedServerNode, clientLinkedNodes, shortPath, unitCost, flow);
-    		System.out.println(000);
-    		
+    	int[] serverNodes = graph.selectServerNodes(2);
+    	int clientsNum = graph.clientNodesNum;
+    	int[] linkedNodes = graph.getLinkedNodes();
+    	boolean[] isSatisfied = new boolean[clientsNum];
+    	for(int clientIndex=0; clientIndex<clientsNum; clientIndex++){
+    		int[] flows = new int[serverNodes.length];
+    		int[] unitCosts = new int[serverNodes.length];
+    		String[] shortPaths = new String[serverNodes.length];
+    		int totalFlow = 0;
+    		for(int serverIndex=0; serverIndex<serverNodes.length; serverIndex++){
+	    		boolean hasShortPath;
+	       		int[] flowTmp = new int[1];
+	    		int[] unitCostTmp = new int[1];
+	    		String[] shortPathTmp = new String[1];
+	    		hasShortPath = graph.getShortPath(serverNodes[serverIndex], new int[]{linkedNodes[clientIndex]}, shortPathTmp, unitCostTmp, flowTmp);
+	    		if(hasShortPath){
+	    			flows[serverIndex] = flowTmp[0];
+	    			unitCosts[serverIndex] = unitCostTmp[0];
+	    			shortPaths[serverIndex] = shortPathTmp[0];
+	    			totalFlow += flows[serverIndex];
+	    			//节点 clientIndex 已满足带宽需求
+	    			if(totalFlow > graph.getDemands()[clientIndex]){
+	    				
+	    			}
+	    		}
+	 			String[] pathNodesStr = shortPathTmp[0].split(" ");
+    			//更新网络中边的带宽
+    			for(int ii=0; ii<pathNodesStr.length; ii++){
+    				for(int jj=ii+1; jj<pathNodesStr.length; jj++){
+    					graph.updateBandwidth(Integer.parseInt(pathNodesStr[ii]), //起始节点
+    							Integer.parseInt(pathNodesStr[jj]), //终止节点
+    							flowTmp[0]);//已占用的带宽
+    				}
+    			}
+	    		System.out.println(000);
+    		}
     	}
-    	
-    	
         return new String[]{"17","\r\n","0 8 0 20"};
     }
     
