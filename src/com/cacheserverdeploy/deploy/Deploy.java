@@ -1,5 +1,15 @@
 package com.cacheserverdeploy.deploy;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.cacheserverdeploy.deploy.Graph;
+import com.cacheserverdeploy.deploy.Graph.UpdateBandwidthOperator;
+
 public class Deploy{
 	private static int lineNum = 0;//网络图读取过程中标记行数
 
@@ -17,42 +27,55 @@ public class Deploy{
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
     	
-    	int[] serverNodes = graph.selectServerNodes(2);
+    	List<Integer> serverNodes = graph.selectServerNodes(1);
     	int clientsNum = graph.clientNodesNum;
-    	int[] linkedNodes = graph.getLinkedNodes();
+    	List<ThreeTuple<Integer, Integer, Integer>> clds = graph.getCLDs();
+    	//将消费节点按照带宽需求排序
+    	Collections.sort(clds, new Comparator<ThreeTuple<Integer, Integer, Integer>>() {
+			@Override
+			public int compare(ThreeTuple<Integer, Integer, Integer> o1, ThreeTuple<Integer, Integer, Integer> o2) {
+				return o2.third - o1.third;
+			}
+		});
     	boolean[] isSatisfied = new boolean[clientsNum];
-    	for(int clientIndex=0; clientIndex<clientsNum; clientIndex++){
-    		int[] flows = new int[serverNodes.length];
-    		int[] unitCosts = new int[serverNodes.length];
-    		String[] shortPaths = new String[serverNodes.length];
-    		int totalFlow = 0;
-    		for(int serverIndex=0; serverIndex<serverNodes.length; serverIndex++){
-	    		boolean hasShortPath;
-	       		int[] flowTmp = new int[1];
-	    		int[] unitCostTmp = new int[1];
-	    		String[] shortPathTmp = new String[1];
-	    		hasShortPath = graph.getShortPath(serverNodes[serverIndex], new int[]{linkedNodes[clientIndex]}, shortPathTmp, unitCostTmp, flowTmp);
-	    		if(hasShortPath){
-	    			flows[serverIndex] = flowTmp[0];
-	    			unitCosts[serverIndex] = unitCostTmp[0];
-	    			shortPaths[serverIndex] = shortPathTmp[0];
-	    			totalFlow += flows[serverIndex];
-	    			//节点 clientIndex 已满足带宽需求
-	    			if(totalFlow > graph.getDemands()[clientIndex]){
-	    				
-	    			}
-	    		}
-	 			String[] pathNodesStr = shortPathTmp[0].split(" ");
-    			//更新网络中边的带宽
-    			for(int ii=0; ii<pathNodesStr.length; ii++){
-    				for(int jj=ii+1; jj<pathNodesStr.length; jj++){
-    					graph.updateBandwidth(Integer.parseInt(pathNodesStr[ii]), //起始节点
-    							Integer.parseInt(pathNodesStr[jj]), //终止节点
-    							flowTmp[0]);//已占用的带宽
-    				}
-    			}
-	    		System.out.println(000);
+    	int loop = 100;
+    	while(loop-- !=0){
+    		List<ThreeTuple<String, Integer, Integer>> pcfs = new ArrayList<>();
+    		Map<ThreeTuple<String, Integer, Integer>, Integer> incresements = new HashMap<>();
+    		for(int i=0; i<clientsNum; i++){
+        		int totalFlow = 0;
+        		int demandFlow = clds.get(i).third;
+        		int needFlow = 0;
+        		int realFlow = 0;
+        		ThreeTuple<String, Integer, Integer> pcf = null; //pcf 表示 path cost flow， 即最短路径和对应的单位带宽租用费用和最大能通过的带宽
+        		while(true){
+    	    		pcf = graph.getOptPCF(serverNodes, clds.get(i).second);
+    	    		if(pcf.second == Graph.MAX_VALUE){
+    	    			break;
+    	    		}
+    	    		needFlow = demandFlow - totalFlow;
+        			realFlow = pcf.third >  needFlow ? needFlow : pcf.third;
+    	    		graph.updateBandWidth(pcf.first, realFlow, UpdateBandwidthOperator.MINUS);
+    	    		System.out.println(pcf.first + " " + clds.get(i).first + " " + realFlow);
+    	    		pcfs.add(pcf);
+    	    		incresements.put(pcf, realFlow);
+    	    		totalFlow += realFlow;
+    	    		System.out.println("need flow: "+ (demandFlow - totalFlow));
+    	    		if(totalFlow == demandFlow){
+    	    			isSatisfied[clds.get(i).first] = true;
+    	    			break;
+    	    		}
+        		}
+        		if(isSatisfied[clds.get(i).first]){
+        			System.out.println(clds.get(i).first + " satisfied!");
+        		}else{
+        			System.out.println(clds.get(i).first + " unsatisfied!");
+        			for(ThreeTuple<String, Integer, Integer> pcfTmp: pcfs)
+        				graph.updateBandWidth(pcfTmp.first, incresements.get(pcfTmp), UpdateBandwidthOperator.PLUS);
+        			break;
+        		}
     		}
+    		
     	}
         return new String[]{"17","\r\n","0 8 0 20"};
     }
