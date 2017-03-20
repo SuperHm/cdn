@@ -4,19 +4,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import com.sun.org.apache.bcel.internal.generic.NEW;
 
 /**
  * 
  * @ClassName: Graph
  *
- * @Description: 
+ * @Description: 网络图结构
  *
  * @author: ccding
  * @date: 2017年3月16日 下午2:52:48
@@ -36,7 +32,7 @@ public class Graph {
 	final int linkNum;
 	final int clientNodesNum;
 	final int serverNodesNum;
-	private List<Map.Entry<Integer, Integer>> frequency;
+	private Map<Integer, Double> frequency;
 
 	
 	public Graph(int serverNodesNum, int clientNodesNum, int serverCost, int linkNum){
@@ -48,7 +44,7 @@ public class Graph {
 		this.linkNum = linkNum;
 		this.clientNodesNum = clientNodesNum;
 		this.serverNodesNum = serverNodesNum;
-		this.frequency = new ArrayList<>();
+		this.frequency = new HashMap<>();
 		for(int i=0; i<this.serverNodesNum; i++){
 			serverNodes[i] = i;
 			bandWidths[i][i] = MAX_VALUE;
@@ -86,7 +82,13 @@ public class Graph {
 		return this.bandWidths;
 	}
 
-	
+	/**
+	 * 根据 path 和 对应的 increment 更新边上剩余带宽
+	 * 
+	 * @param path
+	 * @param increment
+	 * @param operator 
+	 */
 	public void updateBandWidth(String path, int increment, UpdateBandwidthOperator operator){
 		int src, des;
 		String[] pathNodesStr = path.split(" ");
@@ -108,51 +110,66 @@ public class Graph {
      */
     public List<Integer> selectServerNodes(int initServerNum){
     	List<Integer> selectedServerNodes = new ArrayList<>();
-    	this.frequency = new ArrayList<>(calculateFrequency().entrySet());
-    
-    	Collections.sort(this.frequency, new Comparator<Map.Entry<Integer, Integer>>() {
+    	List<Map.Entry<Integer, Double>> freList = new ArrayList<>(this.frequency.entrySet());
+    	Collections.sort(freList, new Comparator<Map.Entry<Integer, Double>>() {
 			@Override
-			public int compare(Entry<Integer, Integer> o1, Entry<Integer, Integer> o2) {
+			public int compare(Entry<Integer, Double> o1, Entry<Integer, Double> o2) {
 				// TODO Auto-generated method stub
-				return o2.getValue()-o1.getValue();
+				return o2.getValue()-o1.getValue() >= 0 ? 1 : -1;
 			}
 		});
     	for(int i=0; i<initServerNum; i++){
-    		selectedServerNodes.add(this.frequency.get(i).getKey());
+    		if(Math.random() < 0.9){
+    			selectedServerNodes.add(freList.remove(0).getKey());
+    		}else{
+    			selectedServerNodes.add(freList.remove((int)(Math.random()*freList.size())).getKey());
+    		}
     	}
     	return selectedServerNodes;
     }
     
-    public List<Map.Entry<Integer, Integer>> getFrequency() {
+    public Map<Integer, Double> getFrequency() {
 		return frequency;
 	}
     
 	/**
      * 统计出现在最短路径中的节点的频次
      */
-    private Map<Integer, Integer> calculateFrequency(){
-    	Map<Integer, Integer> fre = new HashMap<>();
-//    	List<ThreeTuple<String, Integer, Integer>> pathCostFlows = new ArrayList<>();
+    public void initFrequency(){
     	//初始化设置为0
-    	for(int serverNode: serverNodes)
-    		fre.put(serverNode, 0);
+    	for(int i=0; i<serverNodesNum; i++){
+        	double totalBandwidth = 0;
+    		for(int j=0; j<serverNodesNum; j++){
+    			if(i!=j){
+    			totalBandwidth+=bandWidths[i][j];
+    			}
+    		}
+    		
+    		this.frequency.put(serverNodes[i], totalBandwidth);
+    	}
     	for(int i=0; i<clientNodesNum; i++){
     		for(int j = 0; j<clientNodesNum; j++){
     			ThreeTuple<String, Integer, Integer>  pathCostFlow = getShortPath(clds.get(i).second, clds.get(j).second);
     			String[] nodesStr = pathCostFlow.first.split(" ");
-//    			System.out.println(pathCostFlow.first);
     			for(String nodeStr:nodesStr){
     				int node = Integer.parseInt(nodeStr);
-    				fre.put(node, fre.get(node) + 1);
+    				this.frequency.put(node, this.frequency.get(node) + (double)clds.get(j).third/100.0);
     			}
-//    			updateBandWidth(pathCostFlow.first, pathCostFlow.third, UpdateBandwidthOperator.MINUS);
-//    			pathCostFlows.add(pathCostFlow);
     		}
-//    		for(ThreeTuple<String, Integer, Integer> pcf: pathCostFlows)
-//    			updateBandWidth(pcf.first, pcf.third, UpdateBandwidthOperator.PLUS);
-//    		pathCostFlows.clear();
     	}
-    	return fre;
+    }
+    
+   
+    public void updateFrequency(String path){
+    	String[] nodesStr = path.split(" ");
+    	for(String nodeStr: nodesStr){
+    		int node = Integer.parseInt(nodeStr);
+    		this.frequency.put(node, this.frequency.get(node)+1);
+    	}
+    }
+    
+    public void updateFrequency(int node){
+    	this.frequency.put(node, this.frequency.get(node)+20);
     }
 
     /**

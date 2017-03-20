@@ -12,7 +12,7 @@ import com.cacheserverdeploy.deploy.Graph.UpdateBandwidthOperator;
 
 public class Deploy{
 	private static int lineNum = 0;//网络图读取过程中标记行数
-
+	final  static long TIME_LIMIT = 90*1000;
 	/**
      * 你需要完成的入口
      * <功能详细描述>
@@ -20,64 +20,128 @@ public class Deploy{
      * @return [参数说明] 输出结果信息
      * @see [类、类#方法、类#成员]
      */
-    public static String[] deployServer(String[] graphContent){
-    	StringBuffer outStrs = new StringBuffer();
+
+	public static String[] deployServer(String[] graphContent){
+    	long startTime = System.currentTimeMillis();
+    	List<String> outStrs = new ArrayList<>();
+    	List<String> outStrsTmp = null;
+    	int totalCostTmp = 0;
+    	int totalCost = Integer.MAX_VALUE;
         Graph graph = null;
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
-    	
-    	List<Integer> serverNodes = graph.selectServerNodes(1);
+    	graph.initFrequency();
+    	int serverNodesNum = 1;//初始服务器个数设置为1，可根据问题规模动态调整
     	int clientsNum = graph.clientNodesNum;
-    	List<ThreeTuple<Integer, Integer, Integer>> clds = graph.getCLDs();
-    	//将消费节点按照带宽需求排序
-    	Collections.sort(clds, new Comparator<ThreeTuple<Integer, Integer, Integer>>() {
-			@Override
-			public int compare(ThreeTuple<Integer, Integer, Integer> o1, ThreeTuple<Integer, Integer, Integer> o2) {
-				return o2.third - o1.third;
-			}
-		});
-    	boolean[] isSatisfied = new boolean[clientsNum];
-    	int loop = 100;
-    	while(loop-- !=0){
-    		List<ThreeTuple<String, Integer, Integer>> pcfs = new ArrayList<>();
-    		Map<ThreeTuple<String, Integer, Integer>, Integer> incresements = new HashMap<>();
-    		for(int i=0; i<clientsNum; i++){
-        		int totalFlow = 0;
-        		int demandFlow = clds.get(i).third;
-        		int needFlow = 0;
-        		int realFlow = 0;
-        		ThreeTuple<String, Integer, Integer> pcf = null; //pcf 表示 path cost flow， 即最短路径和对应的单位带宽租用费用和最大能通过的带宽
-        		while(true){
-    	    		pcf = graph.getOptPCF(serverNodes, clds.get(i).second);
-    	    		if(pcf.second == Graph.MAX_VALUE){
-    	    			break;
-    	    		}
-    	    		needFlow = demandFlow - totalFlow;
-        			realFlow = pcf.third >  needFlow ? needFlow : pcf.third;
-    	    		graph.updateBandWidth(pcf.first, realFlow, UpdateBandwidthOperator.MINUS);
-    	    		System.out.println(pcf.first + " " + clds.get(i).first + " " + realFlow);
-    	    		pcfs.add(pcf);
-    	    		incresements.put(pcf, realFlow);
-    	    		totalFlow += realFlow;
-    	    		System.out.println("need flow: "+ (demandFlow - totalFlow));
-    	    		if(totalFlow == demandFlow){
-    	    			isSatisfied[clds.get(i).first] = true;
-    	    			break;
-    	    		}
-        		}
-        		if(isSatisfied[clds.get(i).first]){
-        			System.out.println(clds.get(i).first + " satisfied!");
-        		}else{
-        			System.out.println(clds.get(i).first + " unsatisfied!");
-        			for(ThreeTuple<String, Integer, Integer> pcfTmp: pcfs)
-        				graph.updateBandWidth(pcfTmp.first, incresements.get(pcfTmp), UpdateBandwidthOperator.PLUS);
-        			break;
-        		}
-    		}
-    		
+    	int satisfiedClientNum = 0;
+    	List<ThreeTuple<String, Integer, Integer>> pcfs = new ArrayList<>();
+		Map<ThreeTuple<String, Integer, Integer>, Integer> incresements = new HashMap<>();
+    	List<ThreeTuple<Integer, Integer, Integer>> clds = graph.getCLDs();//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
+    	boolean isSolved = false;
+    	int satServerNodeNum = 0;
+    	while(true){
+	    	//将消费节点按照带宽需求排序
+	    	Collections.sort(clds, new Comparator<ThreeTuple<Integer, Integer, Integer>>() {
+				@Override
+				public int compare(ThreeTuple<Integer, Integer, Integer> o1, ThreeTuple<Integer, Integer, Integer> o2) {
+					return o2.third - o1.third;
+				}
+			});
+
+	    	int nobetter = 0;
+	    	int unsat = 0;
+	    	while(true){
+		    	List<Integer> serverNodes = graph.selectServerNodes(serverNodesNum);
+	    		//重新计算新的服务器部署方案，将所有存储信息恢复默认值
+		    	totalCostTmp = 0;
+	    	  	boolean[] isSatisfied = new boolean[clientsNum];
+	    	  	pcfs.clear();
+	    	  	outStrsTmp = new ArrayList<>();
+	    		satisfiedClientNum = 0;
+	    		incresements.clear();
+	    		//加上服务器的部署成本
+	    		totalCostTmp += serverNodes.size() * graph.serverCost;
+	    		
+	    		for(int i=0; i<clientsNum; i++){
+	        		int totalFlow = 0; //已获得的带宽
+	           		int demandFlow = clds.get(i).third;//当前消费节点的需求带宽
+	        		int needFlow = 0;//仍需要的带宽
+	        		int realFlow = 0;//路径上真实传输的带宽
+	        		ThreeTuple<String, Integer, Integer> pcf = null; //pcf 表示 path cost flow， 即最短路径和对应的单位带宽租用费用和最大能通过的带宽
+	        		while(true){
+	        			//返回当前所有服务器到消费节点 clds.get(i).second 最优的一条路径
+	    	    		pcf = graph.getOptPCF(serverNodes, clds.get(i).second);
+	    	    		if(pcf.second == Graph.MAX_VALUE){
+	    	    			break;
+	    	    		}
+	    	    		needFlow = demandFlow - totalFlow;
+	        			realFlow = pcf.third >  needFlow ? needFlow : pcf.third;
+	    	    		graph.updateBandWidth(pcf.first, realFlow, UpdateBandwidthOperator.MINUS);
+	    	    		totalCostTmp += pcf.second * realFlow;
+//	    	    		System.out.println(pcf.first +" "+clds.get(i).first+ " " + realFlow);
+	    	    		outStrsTmp.add(pcf.first +" "+clds.get(i).first+ " " + realFlow+"\r\n");
+	    	    		pcfs.add(pcf);
+	    	    		incresements.put(pcf, realFlow);
+	    	    		totalFlow += realFlow;
+	    	    		if(totalFlow == demandFlow){
+	    	    			isSatisfied[clds.get(i).first] = true;
+	    	    			break;
+	    	    		}
+	        		}
+	        		if(isSatisfied[clds.get(i).first]){
+	        			satisfiedClientNum++;
+	        		}else{
+	        			//当前服务器分配方案不能满足，根据结果跟新每个服务器节点的代价信息
+	        			for(int serverNode: serverNodes){
+	        				ThreeTuple<String, Integer, Integer> pcfClientToServer = graph.getShortPath(clds.get(i).second, serverNode);
+	        				graph.updateFrequency(pcfClientToServer.first);
+	        			}
+	        			//恢复每条边上占用的带宽
+	        			for(ThreeTuple<String, Integer, Integer> pcfTmp: pcfs)
+	        				graph.updateBandWidth(pcfTmp.first, incresements.get(pcfTmp), UpdateBandwidthOperator.PLUS);
+	        			break;
+	        		}
+	    		}
+	    		if(satisfiedClientNum == clientsNum){
+	    			isSolved = true;
+	    			for(int node: serverNodes)
+	    				
+//	    			System.out.println(serverNodes);
+//	    			System.out.println("sat");
+//	    			System.out.println(totalCostTmp);
+	    			if(totalCostTmp < totalCost){
+	    				satServerNodeNum = serverNodesNum;
+	    				totalCost = totalCostTmp;
+	    				outStrs = new ArrayList<>(outStrsTmp);
+	    			}else{
+	    				nobetter++;
+		    			if(nobetter > serverNodesNum * 5000)
+		    				break;
+	    			}
+	    		}else{
+//	    			System.out.println(serverNodes);
+//	    			System.out.println("unsat");
+	    			unsat++;
+	    			if(unsat > serverNodesNum * 1000)
+	    				break;
+	    		}
+	    	}
+	    	serverNodesNum++;
+//	    	System.out.println(serverNodesNum);
+	    	if((satServerNodeNum!=0 && ((serverNodesNum-satServerNodeNum)>(double)clientsNum/5.0))
+	    			|| System.currentTimeMillis() - startTime > TIME_LIMIT)
+	    		break;
     	}
-        return new String[]{"17","\r\n","0 8 0 20"};
+    	
+    	if(isSolved){
+    		StringBuffer sb = new StringBuffer();
+    		for(String s: outStrs)
+    			sb.append(s);
+    		return new String[]{outStrs.size()+"", "\r\n", sb.toString()};
+    	}else{
+    		return new String[]{"NA"};
+    	}
     }
     
 
