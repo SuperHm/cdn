@@ -3,10 +3,8 @@ package com.cacheserverdeploy.deploy;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+
 
 /**
  * 
@@ -24,21 +22,25 @@ public class Graph {
 	}
 	final static int MAX_VALUE = 100000;
 
-	private int[] nodes;//图中所有非消费节点
+	private List<Integer> nodes;//图中所有非消费节点
 	private int[][] bandWidths;
-	private int[][] unitCosts;;
-	List<ThreeTuple<Integer, Integer, Integer>> clds;//client linkedNode demand表示消费节点集合
+	private int[][] unitCosts;
+	private List<ThreeTuple<Integer, Integer, Integer>> clds;	//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
 	final int serverCost;
 	final int linkNum;
 	final int clientsNum;
 	final int nodesNum;
-	private int[] assessedValues; //存储每个节点的评估值
+
 	private boolean[] isServer; //对应节点是否设置为服务器
-	private boolean[] isLinkedNode; //是否连接消费节点
+	
+	/*与节点评估值相关的信息*/
+	private int[] assessedValues; //存储每个节点的评估值
+	private int[] totalCost; //存储每个节点所有带宽的租用费用和
+	private int[] totalFlow; //每个节点的能够提供的带宽和
 
 	
 	public Graph(int nodesNum, int clientsNum, int serverCost, int linkNum){
-		this.nodes = new int[nodesNum];
+		this.nodes = new ArrayList<>(nodesNum);
 		this.clds = new ArrayList<>(clientsNum);
 		this.bandWidths = new int[nodesNum][nodesNum];
 		this.unitCosts = new int[nodesNum][nodesNum];
@@ -46,12 +48,18 @@ public class Graph {
 		this.linkNum = linkNum;
 		this.clientsNum = clientsNum;
 		this.nodesNum = nodesNum;
+		
+		
 		this.assessedValues = new int[nodesNum];
+		this.totalCost = new int[nodesNum];
+		this.totalFlow = new int[nodesNum];
+		
 		this.isServer = new boolean[nodesNum];
-		this.isLinkedNode = new boolean[nodesNum];
+		
 		for(int i=0; i<nodesNum; i++){
-			nodes[i] = i;
+			nodes.add(i);
 			bandWidths[i][i] = MAX_VALUE;
+			isServer[i] = true;
 		}
 		
 	}
@@ -62,40 +70,49 @@ public class Graph {
 		this.bandWidths[des][src] = bandWidth;
 		this.unitCosts[src][des] = unitCost;
 		this.unitCosts[des][src] = unitCost;
-		assessedValues[src]+=bandWidth;
-		assessedValues[des]+=bandWidth;
+		this.totalCost[src] += bandWidth * unitCost;
+		this.totalCost[des] += bandWidth * unitCost;
+		this.totalFlow[src] += bandWidth;
+		this.totalFlow[des] += bandWidth;
 		
 	}
 	
 	public void addClient(int node, int linkedNode, int demand){
-		isLinkedNode[linkedNode] = true;
-		assessedValues[linkedNode] += demand;
-		clds.add(new ThreeTuple<>(node, linkedNode, demand));
+		this.totalFlow[linkedNode] += demand;//与消费节点连接的节点能满足对应消费节点的所有带宽
+		this.clds.add(new ThreeTuple<>(node, linkedNode, demand));
 	}
 	
-	public int[] getNodes() {
+	public List<Integer> getNodes() {
 		return nodes;
 	}
-
-	public List<ThreeTuple<Integer, Integer, Integer>> getCLDs() {
-		return clds;
-	}
-
-	public int[][] getUnitCosts() {
-		return unitCosts;
-	}
-
-
-	public int[][] getBandWidths(){
-		return this.bandWidths;
+	
+	public List<Integer> getServers(){
+		List<Integer> serverList = new ArrayList<>();
+		for(int i=0; i<nodesNum; i++){
+		if(this.isServer[i])
+			serverList.add(i);
+		}
+		return serverList;
 	}
 
 	/**
+	 * 将消费节点按照带宽需求排序
+	 */
+	public void sortClients(){
+    	Collections.sort(this.clds, new Comparator<ThreeTuple<Integer, Integer, Integer>>() {
+			@Override
+			public int compare(ThreeTuple<Integer, Integer, Integer> o1, ThreeTuple<Integer, Integer, Integer> o2) {
+				return o2.third - o1.third;
+			}
+		});
+	}
+	
+	/**
 	 * 根据 path 和 对应的 increment 更新边上剩余带宽
 	 * 
-	 * @param path
-	 * @param increment
-	 * @param operator 
+	 * @param path 路径
+	 * @param increment 增量
+	 * @param operator 增加或者减少
 	 */
 	public void updateBandWidth(String path, int increment, UpdateBandwidthOperator operator){
 		int src, des;
@@ -110,76 +127,73 @@ public class Graph {
 			}
 		}
 	}
-    /**
-     * 按一定策略选择初始服务器节点
-     * 
-     * @param serverNum 服务器节点个数
-     * @return 选择的服务器节点
-     */
-    public List<Integer> selectServerNodes(int initServerNum){
-    	List<Integer> selectedServerNodes = new ArrayList<>();
-    	List<Map.Entry<Integer, Double>> freList = new ArrayList<>(this.frequency.entrySet());
-    	Collections.sort(freList, new Comparator<Map.Entry<Integer, Double>>() {
-			@Override
-			public int compare(Entry<Integer, Double> o1, Entry<Integer, Double> o2) {
-				// TODO Auto-generated method stub
-				return o2.getValue()-o1.getValue() >= 0 ? 1 : -1;
-			}
-		});
-    	for(int i=0; i<initServerNum; i++){
-    		if(Math.random() < 0.9){
-    			selectedServerNodes.add(freList.remove(0).getKey());
-    		}else{
-    			selectedServerNodes.add(freList.remove((int)(Math.random()*freList.size())).getKey());
-    		}
-    	}
-    	return selectedServerNodes;
-    }
-    
-    public Map<Integer, Double> getFrequency() {
-		return frequency;
-	}
+
+ 
     
 	/**
      * 初始化每个节点的评估值
      * 初始评估值设置方法是 该节点流出流量值之和 + w*该节点出现在消费节点之间最短路径上的频次
      * 其中，节点流出流量之和，在读取图的过程中已经初始化
      */
-    public void initFrequency(){
-    	//初始化设置为0
-    	for(int i=0; i<nodesNum; i++){
-        	double totalBandwidth = 0;
-    		for(int j=0; j<nodesNum; j++){
-    			if(i!=j){
-    			totalBandwidth+=bandWidths[i][j];
-    			}
-    		}
+    public void initAssessedValues(){
+    	for(int i=0; i<this.nodesNum; i++){
+    		this.assessedValues[i] = 0;
+    	}
+    }
+    
+    /**
+     * 计算某个server部署方案的成本
+     * 
+     * @param servers 服务器部署方案
+     * @param pcfClientAllocated 存储已经占用路径,连接的消费节点及分配的带宽
+     * @return 返回二元组，如果能够满足所有消费节点，返回 <true, 对应的成本>，如果不能满足所有消费节点，返回 <false, 0>
+     */
+    public TwoTuple<Boolean, Integer> costOfServerNodes(List<Integer> servers,
+    		List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocated){
+    	int totalCost = 0;
+      	boolean[] isSatisfied = new boolean[this.clientsNum];
+    	int satClientNum = 0;
+    	//加上服务器的部署成本
+    	totalCost = servers.size() * this.serverCost;
+    	
+    	for(int i=0; i<this.clientsNum; i++){
+    		int obtained = 0; //节点i已获得的带宽
+       		int demand = this.clds.get(i).third;//当前消费节点的需求带宽
+    		int need = 0;//仍需要的带宽
+    		int allocated = 0;//某路径上真实分配的带宽
     		
-    		this.frequency.put(nodes[i], totalBandwidth);
-    	}
-    	for(int i=0; i<clientsNum; i++){
-    		for(int j = 0; j<clientsNum; j++){
-    			ThreeTuple<String, Integer, Integer>  pathCostFlow = getShortPath(clds.get(i).second, clds.get(j).second);
-    			String[] nodesStr = pathCostFlow.first.split(" ");
-    			for(String nodeStr:nodesStr){
-    				int node = Integer.parseInt(nodeStr);
-    				this.frequency.put(node, this.frequency.get(node) + (double)clds.get(j).third/100.0);
-    			}
+    		ThreeTuple<String, Integer, Integer> pcf = null; //pcf 表示 path cost flow， 即最短路径和对应的单位带宽租用费用和最大能通过的带宽
+    		while(true){
+    			//返回当前所有服务器到消费节点 clds.get(i).second 最优的一条路径
+        		pcf = getOptPCF(servers, this.clds.get(i).second);
+        		//所有服务器都不存在路径到消费该节点
+        		if(pcf.second == Graph.MAX_VALUE){
+        			break;
+        		}
+        		need = demand - obtained;
+    			allocated = pcf.third >  need ? need : pcf.third;//按需求分配带宽，若路径剩余带宽大于仍需要的带宽，仅需分配仍需要的带宽即可
+        		updateBandWidth(pcf.first, allocated, UpdateBandwidthOperator.MINUS); //更新边上剩余带宽
+        		totalCost += pcf.second * allocated;
+//        		System.out.println(pcf.first +" "+clds.get(i).first+ " " + realFlow);
+//        		outStrsTmp.add("\r\n"+pcf.first +" "+clds.get(i).first+ " " + realFlow);
+        		pcfClientAllocated.add(new ThreeTuple<>(pcf, this.clds.get(i).first, allocated));
+        		obtained += allocated;
+        		if(obtained == demand){
+        			isSatisfied[clds.get(i).first] = true;
+        			break;
+        		}
+    		}
+    		if(isSatisfied[clds.get(i).first]){
+    			satClientNum++;
+    		}else{       
+    			break;
     		}
     	}
-    }
-    
-   
-    public void updateFrequency(String path){
-    	String[] nodesStr = path.split(" ");
-    	for(String nodeStr: nodesStr){
-    		int node = Integer.parseInt(nodeStr);
-    		this.frequency.put(node, this.frequency.get(node)+1);
+    	if(satClientNum == this.clientsNum){
+    		return new TwoTuple<>(true, totalCost);
+    	}else{
+    		return new TwoTuple<>(false, 0);
     	}
-    }
-    
-    public void updateFrequency(int node){
-    	this.frequency.put(node, this.frequency.get(node)+20);
     }
 
     /**
@@ -188,7 +202,7 @@ public class Graph {
      * @param linkedNode
      * @return
      */
-    public ThreeTuple<String, Integer, Integer> getOptPCF(List<Integer> serverNodes, int linkedNode){
+    private ThreeTuple<String, Integer, Integer> getOptPCF(List<Integer> serverNodes, int linkedNode){
     	List<ThreeTuple<String, Integer, Integer>> pcfs = new ArrayList<>();
 		ThreeTuple<String, Integer, Integer> pcf = null;
 		for(int serverIdx=0; serverIdx<serverNodes.size(); serverIdx++){
@@ -212,7 +226,7 @@ public class Graph {
      * @param shortPath 路径信息
      * @param dis 最小单位租用费用
      */
-    public ThreeTuple<String, Integer, Integer> getShortPath(int src, int des){
+    private ThreeTuple<String, Integer, Integer> getShortPath(int src, int des){
     	if(src == des){
     		return new ThreeTuple<String, Integer, Integer>(src+"", 0, MAX_VALUE);
     	}
@@ -281,13 +295,23 @@ public class Graph {
     
 }
 
-class  ThreeTuple<A, B extends Comparable<? super B>, C extends Comparable<? super C>>{
+
+
+
+
+class TwoTuple<A, B extends Comparable<? super B>>{
 	final A first;
 	final B second;
-	final C third;
-	public ThreeTuple(A first, B second, C third){
+	public TwoTuple(A first, B second){
 		this.first = first;
 		this.second = second;
+	}
+}
+class  ThreeTuple<A,  B extends Comparable<? super B>, C extends Comparable<? super C>> extends TwoTuple<A,  B>{
+	
+	final C third;
+	public ThreeTuple(A first, B second, C third){
+		super(first, second);
 		this.third = third;
 	}
 	
