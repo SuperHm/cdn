@@ -24,29 +24,33 @@ public class Graph {
 	}
 	final static int MAX_VALUE = 100000;
 
-	private int[] serverNodes;//服务节点
+	private int[] nodes;//图中所有非消费节点
 	private int[][] bandWidths;
 	private int[][] unitCosts;;
 	List<ThreeTuple<Integer, Integer, Integer>> clds;//client linkedNode demand表示消费节点集合
 	final int serverCost;
 	final int linkNum;
-	final int clientNodesNum;
-	final int serverNodesNum;
-	private Map<Integer, Double> frequency;
+	final int clientsNum;
+	final int nodesNum;
+	private int[] assessedValues; //存储每个节点的评估值
+	private boolean[] isServer; //对应节点是否设置为服务器
+	private boolean[] isLinkedNode; //是否连接消费节点
 
 	
-	public Graph(int serverNodesNum, int clientNodesNum, int serverCost, int linkNum){
-		this.serverNodes = new int[serverNodesNum];
-		this.clds = new ArrayList<>(clientNodesNum);
-		this.bandWidths = new int[serverNodesNum][serverNodesNum];
-		this.unitCosts = new int[serverNodesNum][serverNodesNum];
+	public Graph(int nodesNum, int clientsNum, int serverCost, int linkNum){
+		this.nodes = new int[nodesNum];
+		this.clds = new ArrayList<>(clientsNum);
+		this.bandWidths = new int[nodesNum][nodesNum];
+		this.unitCosts = new int[nodesNum][nodesNum];
 		this.serverCost = serverCost;
 		this.linkNum = linkNum;
-		this.clientNodesNum = clientNodesNum;
-		this.serverNodesNum = serverNodesNum;
-		this.frequency = new HashMap<>();
-		for(int i=0; i<this.serverNodesNum; i++){
-			serverNodes[i] = i;
+		this.clientsNum = clientsNum;
+		this.nodesNum = nodesNum;
+		this.assessedValues = new int[nodesNum];
+		this.isServer = new boolean[nodesNum];
+		this.isLinkedNode = new boolean[nodesNum];
+		for(int i=0; i<nodesNum; i++){
+			nodes[i] = i;
 			bandWidths[i][i] = MAX_VALUE;
 		}
 		
@@ -58,15 +62,19 @@ public class Graph {
 		this.bandWidths[des][src] = bandWidth;
 		this.unitCosts[src][des] = unitCost;
 		this.unitCosts[des][src] = unitCost;
+		assessedValues[src]+=bandWidth;
+		assessedValues[des]+=bandWidth;
 		
 	}
 	
 	public void addClient(int node, int linkedNode, int demand){
+		isLinkedNode[linkedNode] = true;
+		assessedValues[linkedNode] += demand;
 		clds.add(new ThreeTuple<>(node, linkedNode, demand));
 	}
 	
-	public int[] getServerNodes() {
-		return serverNodes;
+	public int[] getNodes() {
+		return nodes;
 	}
 
 	public List<ThreeTuple<Integer, Integer, Integer>> getCLDs() {
@@ -133,22 +141,24 @@ public class Graph {
 	}
     
 	/**
-     * 统计出现在最短路径中的节点的频次
+     * 初始化每个节点的评估值
+     * 初始评估值设置方法是 该节点流出流量值之和 + w*该节点出现在消费节点之间最短路径上的频次
+     * 其中，节点流出流量之和，在读取图的过程中已经初始化
      */
     public void initFrequency(){
     	//初始化设置为0
-    	for(int i=0; i<serverNodesNum; i++){
+    	for(int i=0; i<nodesNum; i++){
         	double totalBandwidth = 0;
-    		for(int j=0; j<serverNodesNum; j++){
+    		for(int j=0; j<nodesNum; j++){
     			if(i!=j){
     			totalBandwidth+=bandWidths[i][j];
     			}
     		}
     		
-    		this.frequency.put(serverNodes[i], totalBandwidth);
+    		this.frequency.put(nodes[i], totalBandwidth);
     	}
-    	for(int i=0; i<clientNodesNum; i++){
-    		for(int j = 0; j<clientNodesNum; j++){
+    	for(int i=0; i<clientsNum; i++){
+    		for(int j = 0; j<clientsNum; j++){
     			ThreeTuple<String, Integer, Integer>  pathCostFlow = getShortPath(clds.get(i).second, clds.get(j).second);
     			String[] nodesStr = pathCostFlow.first.split(" ");
     			for(String nodeStr:nodesStr){
@@ -184,7 +194,6 @@ public class Graph {
 		for(int serverIdx=0; serverIdx<serverNodes.size(); serverIdx++){
 			pcf = getShortPath(serverNodes.get(serverIdx), linkedNode);
 			pcfs.add(pcf);
-//			System.out.println(pcf);
 		}
 		Collections.sort(pcfs, new Comparator<ThreeTuple<String, Integer, Integer>>(){
 			@Override
@@ -207,25 +216,27 @@ public class Graph {
     	if(src == des){
     		return new ThreeTuple<String, Integer, Integer>(src+"", 0, MAX_VALUE);
     	}
-    	int[] disTmp = new int[serverNodesNum];
-    	int[] flowTmp = new int[serverNodesNum];
-    	String[] shortPathTmp = new String[serverNodesNum];
-    	dijkstra(src, shortPathTmp, disTmp, flowTmp);
-    	return new ThreeTuple<String, Integer, Integer>(shortPathTmp[des], disTmp[des], flowTmp[des]);
+    	int[] costs = new int[nodesNum];
+    	int[] flows = new int[nodesNum];
+    	String[] shortPaths = new String[nodesNum];
+    	//dijkstra方法计算结果是 src 到所有顶点的最短距离
+    	dijkstra(src, shortPaths, costs, flows);
+    	return new ThreeTuple<String, Integer, Integer>(shortPaths[des], costs[des], flows[des]);
     }
     
-    private void dijkstra(int src, String[] shortPaths, int[] dises, int[] flows){
-    	int nodesNum = this.serverNodesNum;
-    	int[][] edgesWeight = new int[nodesNum][nodesNum];
+    private void dijkstra(int src, String[] shortPaths, int[] unitCosts, int[] flows){
+    	int nodesNum = this.nodesNum;
+    	
+    	int[][] costs = new int[nodesNum][nodesNum];
     	int[][] maxFlow = new int[nodesNum][nodesNum];
     	//初始化图中单位租用费用信息和最大流量信息。不存在的链路单位租用费用设置为最大值，最大流量设置为0
     	for(int i=0; i<nodesNum; i++){
     		for(int j=0; j<nodesNum; j++){
         		maxFlow[i][j] = bandWidths[i][j];
-    			if(unitCosts[i][j] == 0 || bandWidths[i][j] == 0){//没有对应的边
-    				edgesWeight[i][j] = MAX_VALUE;
+    			if(costs[i][j] == 0 || bandWidths[i][j] == 0){//没有对应的边
+    				costs[i][j] = MAX_VALUE;
     			}else{
-    				edgesWeight[i][j]  = unitCosts[i][j];
+    				costs[i][j]  = this.unitCosts[i][j];
     			}
     		}
     	}
@@ -233,41 +244,43 @@ public class Graph {
     	boolean isVisited[] = new boolean[nodesNum];//标记节点最短距离是否求出
     	
     	//初始化节点 src 到其他节点的距离为无穷大
-    	for(int i=0; i<dises.length; i++){
-    		dises[i] = Integer.MAX_VALUE;
+    	for(int i=0; i<unitCosts.length; i++){
+    		unitCosts[i] = Integer.MAX_VALUE;
     		shortPaths[i] = src+" "+i;
     	}
     	
     	isVisited[src] = true;
-    	dises[src] = 0;
+    	unitCosts[src] = 0;
     	flows[src] = MAX_VALUE;
     	
     	for(int count=1; count<nodesNum; count++){
     		int minDis = Integer.MAX_VALUE;
     		int nextNode = -1;
-    		int tmp = 0;
+    		int flow = 0;
     		for(int i=0; i<nodesNum; i++){
 				if(! isVisited[i] && 
-						(edgesWeight[src][i] < minDis || (edgesWeight[src][i] == minDis && maxFlow[src][i] > tmp))){
-					minDis = edgesWeight[src][i];
+						(costs[src][i] < minDis || (costs[src][i] == minDis && maxFlow[src][i] > flow))){
+					minDis = costs[src][i];
 					nextNode = i;
-					tmp = maxFlow[src][i];
+					flow = maxFlow[src][i];
 				}
     		}
-    		dises[nextNode] = minDis;
-    		flows[nextNode] = tmp;
+    		unitCosts[nextNode] = minDis;
+    		flows[nextNode] = flow;
     		isVisited[nextNode] = true;
     		//松弛操作
     		for(int i=0; i<nodesNum; i++){
-				if(!isVisited[i] && edgesWeight[src][nextNode]+edgesWeight[nextNode][i]< edgesWeight[src][i]){
-					edgesWeight[src][i] = edgesWeight[src][nextNode] + edgesWeight[nextNode][i];
+				if(!isVisited[i] && costs[src][nextNode]+costs[nextNode][i]< costs[src][i]){
+					costs[src][i] = costs[src][nextNode] + costs[nextNode][i];
 					maxFlow[src][i] = Math.min(maxFlow[src][nextNode], maxFlow[nextNode][i]);
 					shortPaths[i] = shortPaths[nextNode] +" "+i;
 				}
     		}
     	}
     }
+    
 }
+
 class  ThreeTuple<A, B extends Comparable<? super B>, C extends Comparable<? super C>>{
 	final A first;
 	final B second;

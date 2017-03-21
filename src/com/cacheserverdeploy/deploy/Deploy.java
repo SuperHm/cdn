@@ -80,7 +80,7 @@ public class Deploy{
 	    	    		graph.updateBandWidth(pcf.first, realFlow, UpdateBandwidthOperator.MINUS);
 	    	    		totalCostTmp += pcf.second * realFlow;
 //	    	    		System.out.println(pcf.first +" "+clds.get(i).first+ " " + realFlow);
-	    	    		outStrsTmp.add(pcf.first +" "+clds.get(i).first+ " " + realFlow+"\r\n");
+	    	    		outStrsTmp.add("\r\n"+pcf.first +" "+clds.get(i).first+ " " + realFlow);
 	    	    		pcfs.add(pcf);
 	    	    		incresements.put(pcf, realFlow);
 	    	    		totalFlow += realFlow;
@@ -109,7 +109,7 @@ public class Deploy{
 	    				
 //	    			System.out.println(serverNodes);
 //	    			System.out.println("sat");
-//	    			System.out.println(totalCostTmp);
+	    			System.out.println(totalCostTmp);
 	    			if(totalCostTmp < totalCost){
 	    				satServerNodeNum = serverNodesNum;
 	    				totalCost = totalCostTmp;
@@ -128,7 +128,7 @@ public class Deploy{
 	    		}
 	    	}
 	    	serverNodesNum++;
-//	    	System.out.println(serverNodesNum);
+	    	System.out.println(serverNodesNum);
 	    	if((satServerNodeNum!=0 && ((serverNodesNum-satServerNodeNum)>(double)clientsNum/5.0))
 	    			|| System.currentTimeMillis() - startTime > TIME_LIMIT)
 	    		break;
@@ -138,7 +138,7 @@ public class Deploy{
     		StringBuffer sb = new StringBuffer();
     		for(String s: outStrs)
     			sb.append(s);
-    		return new String[]{outStrs.size()+"", "\r\n", sb.toString()};
+    		return new String[]{outStrs.size()+"", sb.toString()};
     	}else{
     		return new String[]{"NA"};
     	}
