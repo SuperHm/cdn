@@ -3,7 +3,15 @@ package com.cacheserverdeploy.deploy;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import com.sun.org.apache.xpath.internal.operations.Bool;
+
+
 
 
 /**
@@ -23,22 +31,32 @@ public class Graph {
 	final static int MAX_VALUE = 100000;
 
 	private List<Integer> nodes;//图中所有非消费节点
-	private int[][] bandWidths;
-	private int[][] unitCosts;
-	private List<ThreeTuple<Integer, Integer, Integer>> clds;	//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
+	int[][] bandWidths;
+	int[][] unitCosts;
+	List<ThreeTuple<Integer, Integer, Integer>> clds;	//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
 	final int serverCost;
 	final int linkNum;
 	final int clientsNum;
 	final int nodesNum;
-
-	private boolean[] isServer; //对应节点是否设置为服务器
+	private boolean isSolve;
+	boolean[] isServer; //对应节点是否设置为服务器
 	
+
+
 	/*与节点评估值相关的信息*/
 	private int[] assessedValues; //存储每个节点的评估值
 	private int[] totalCost; //存储每个节点所有带宽的租用费用和
-	private int[] totalFlow; //每个节点的能够提供的带宽和
+	int[] totalFlow; //每个节点的能够提供的带宽和
+	int totalFlows;
+	int totalDemand;
+	float maxUnitCostOfDemand;
+	int[][] clientToNodesdis;
+	List<League> leagues;
+	Map<Integer, Integer> leagueID;
 
-	
+
+
+
 	public Graph(int nodesNum, int clientsNum, int serverCost, int linkNum){
 		this.nodes = new ArrayList<>(nodesNum);
 		this.clds = new ArrayList<>(clientsNum);
@@ -53,9 +71,11 @@ public class Graph {
 		this.assessedValues = new int[nodesNum];
 		this.totalCost = new int[nodesNum];
 		this.totalFlow = new int[nodesNum];
-		
+		this.totalFlows = 0;
 		this.isServer = new boolean[nodesNum];
-		
+		this.clientToNodesdis = new int[clientsNum][nodesNum];
+		leagues = new ArrayList<>(clientsNum);
+		leagueID = new HashMap<>();
 		for(int i=0; i<nodesNum; i++){
 			nodes.add(i);
 			bandWidths[i][i] = MAX_VALUE;
@@ -65,6 +85,16 @@ public class Graph {
 	}
 	
 	
+	
+	
+	public String printServers() {
+		StringBuffer sb = new StringBuffer();
+		for(int i=0; i<nodesNum; i++)
+			if(isServer[i])
+			sb.append(i+" ");
+		return sb.toString();
+			
+	}
 	public void addEdge(int src, int des, int bandWidth, int unitCost){
 		this.bandWidths[src][des] = bandWidth;
 		this.bandWidths[des][src] = bandWidth;
@@ -80,6 +110,7 @@ public class Graph {
 	public void addClient(int node, int linkedNode, int demand){
 		this.totalFlow[linkedNode] += demand;//与消费节点连接的节点能满足对应消费节点的所有带宽
 		this.clds.add(new ThreeTuple<>(node, linkedNode, demand));
+		this.totalDemand+= demand;
 	}
 	
 	public List<Integer> getNodes() {
@@ -93,6 +124,71 @@ public class Graph {
 			serverList.add(i);
 		}
 		return serverList;
+	}
+
+	public boolean isSolve() {
+		return isSolve;
+	}
+
+	
+	public void calculateDis(){
+		for(int i=0; i<clientsNum; i++){
+			this.clientToNodesdis[clds.get(i).first] = getShortDis(clds.get(i).second, nodes);
+		}
+	}
+	
+	public void initLeagus(){
+		for(League league: leagues){
+			league.initOffer(this);
+		}
+	}
+	
+	public League getLeague(int id){
+		for(League league: leagues)
+			if(league.client == id)
+				return league;
+		return null;
+	}
+	
+	
+	public void createLeagues(){
+		boolean isVisited[] = new boolean[this.nodes.size()];
+		for(ThreeTuple<Integer, Integer, Integer> cld: this.clds){
+			League league = new League(cld.first, cld.third);
+			league.nodes.add(cld.second);
+			leagueID.put( cld.second, league.client);
+			isVisited[cld.second] = true;
+			this.leagues.add(league);
+		}
+		int visitedNodeNum = leagues.size();
+		int dis = 1;
+		while(visitedNodeNum != this.nodesNum){
+			for(League league: leagues){
+				for(int node: this.nodes){
+					if(!isVisited[node]){
+						if(this.clientToNodesdis[league.client][node] == dis){
+							league.nodes.add(node);
+							leagueID.put(node, league.client);
+							isVisited[node] = true;
+							visitedNodeNum++;
+						}
+					}
+				}
+			}
+			dis++;
+		}
+		
+	}
+	
+	
+
+
+	public void setSolve(boolean isSolve) {
+		this.isSolve = isSolve;
+	}
+	
+	public int[] getAssessedValues(){
+		return this.assessedValues;
 	}
 
 	/**
@@ -127,7 +223,35 @@ public class Graph {
 			}
 		}
 	}
+	public void updateBandWidth(List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocates, UpdateBandwidthOperator operator){
+		for(ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer> pcfCA:pcfClientAllocates){
+			updateBandWidth(pcfCA.first.first, pcfCA.third, operator);
+		}
+	}
 
+	public void flipNode(){
+		int maxNode = 0;
+		int minNode = 0;
+		int maxAssVal = 0;
+		int minAssVal = Integer.MAX_VALUE;
+		for(int i=0; i<nodesNum; i++){
+			if(assessedValues[i] > maxAssVal){
+				maxAssVal = assessedValues[i];
+				maxNode = i;
+			}
+			if(assessedValues[i] < minAssVal){
+				minAssVal = assessedValues[i];
+				minNode = i;
+			}
+		}
+		isServer[maxNode] = true;
+		isServer[minNode] = false;
+	}
+	
+	
+	
+	
+	
  
     
 	/**
@@ -137,9 +261,17 @@ public class Graph {
      */
     public void initAssessedValues(){
     	for(int i=0; i<this.nodesNum; i++){
-    		this.assessedValues[i] = 0;
+    		this.assessedValues[i] = this.totalFlow[i];
+    		this.totalFlows+=totalFlow[i];
     	}
+    	for(int i=0; i<this.nodesNum; i++){
+//    		if(Math.random() > (double)totalFlow[i]/totalFlows)
+    			isServer[i] = false;
+    	}
+    	this.maxUnitCostOfDemand = ((float)serverCost*clientsNum)/(float)totalDemand;
+    	
     }
+    
     
     /**
      * 计算某个server部署方案的成本
@@ -148,9 +280,10 @@ public class Graph {
      * @param pcfClientAllocated 存储已经占用路径,连接的消费节点及分配的带宽
      * @return 返回二元组，如果能够满足所有消费节点，返回 <true, 对应的成本>，如果不能满足所有消费节点，返回 <false, 0>
      */
-    public TwoTuple<Boolean, Integer> costOfServerNodes(List<Integer> servers,
+    public TwoTuple<Boolean, Float> costOfServerNodes(List<Integer> servers,
     		List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocated){
     	int totalCost = 0;
+    	int totalObtained = 0;
       	boolean[] isSatisfied = new boolean[this.clientsNum];
     	int satClientNum = 0;
     	//加上服务器的部署成本
@@ -185,14 +318,13 @@ public class Graph {
     		}
     		if(isSatisfied[clds.get(i).first]){
     			satClientNum++;
-    		}else{       
-    			break;
     		}
+    		totalObtained+=obtained;
     	}
     	if(satClientNum == this.clientsNum){
-    		return new TwoTuple<>(true, totalCost);
+    		return new TwoTuple<>(true, totalCost - totalObtained* maxUnitCostOfDemand);
     	}else{
-    		return new TwoTuple<>(false, 0);
+    		return new TwoTuple<>(false, totalCost - totalObtained *maxUnitCostOfDemand);
     	}
     }
 
@@ -238,6 +370,32 @@ public class Graph {
     	return new ThreeTuple<String, Integer, Integer>(shortPaths[des], costs[des], flows[des]);
     }
     
+    private String[] getShortPath(int src, List<Integer> des){
+    	int[] costs = new int[nodesNum];
+    	int[] flows = new int[nodesNum];
+    	String[] shortPaths = new String[nodesNum];
+    	//dijkstra方法计算结果是 src 到所有顶点的最短距离
+    	dijkstra(src, shortPaths, costs, flows);
+    	String[] paths = new String[des.size()];
+    	for(int i=0; i<paths.length; i++){
+    		paths[i] = shortPaths[des.get(i)];
+    	}
+    	return paths;
+    }
+    
+    private int[] getShortDis(int src, List<Integer> des){
+    	int[] costs = new int[nodesNum];
+    	int[] flows = new int[nodesNum];
+    	String[] shortPaths = new String[nodesNum];
+    	//dijkstra方法计算结果是 src 到所有顶点的最短距离
+    	dijkstra(src, shortPaths, costs, flows);
+    	int[] dis = new int[des.size()];
+    	for(int i=0; i<dis.length; i++){
+    		dis[i] = costs[des.get(i)];
+    	}
+    	return dis;
+    }
+    
     private void dijkstra(int src, String[] shortPaths, int[] unitCosts, int[] flows){
     	int nodesNum = this.nodesNum;
     	
@@ -247,7 +405,7 @@ public class Graph {
     	for(int i=0; i<nodesNum; i++){
     		for(int j=0; j<nodesNum; j++){
         		maxFlow[i][j] = bandWidths[i][j];
-    			if(costs[i][j] == 0 || bandWidths[i][j] == 0){//没有对应的边
+    			if(this.unitCosts[i][j] == 0 || this.bandWidths[i][j] == 0){//没有对应的边
     				costs[i][j] = MAX_VALUE;
     			}else{
     				costs[i][j]  = this.unitCosts[i][j];
@@ -292,6 +450,16 @@ public class Graph {
     		}
     	}
     }
+
+
+	public int getTotalFlows() {
+		return totalFlows;
+	}
+
+
+	public void setTotalFlows(int totalFlows) {
+		this.totalFlows = totalFlows;
+	}
     
 }
 
@@ -299,17 +467,22 @@ public class Graph {
 
 
 
-class TwoTuple<A, B extends Comparable<? super B>>{
-	final A first;
-	final B second;
+class TwoTuple<A, B>{
+	A first;
+	B second;
 	public TwoTuple(A first, B second){
 		this.first = first;
 		this.second = second;
 	}
+	@Override
+	public String toString(){
+		
+		return this.first + " " + this.second;
+	}
 }
-class  ThreeTuple<A,  B extends Comparable<? super B>, C extends Comparable<? super C>> extends TwoTuple<A,  B>{
+class  ThreeTuple<A,  B, C extends Comparable<? super C>> extends TwoTuple<A,  B>{
 	
-	final C third;
+	C third;
 	public ThreeTuple(A first, B second, C third){
 		super(first, second);
 		this.third = third;

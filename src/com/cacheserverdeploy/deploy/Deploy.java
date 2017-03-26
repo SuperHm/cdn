@@ -1,9 +1,13 @@
 package com.cacheserverdeploy.deploy;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
+import java.util.Set;
 
 import com.cacheserverdeploy.deploy.Graph;
+import com.cacheserverdeploy.deploy.Graph.UpdateBandwidthOperator;
 
 public class Deploy{
 	private static int lineNum = 0;//网络图读取过程中标记行数
@@ -23,29 +27,77 @@ public class Deploy{
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
     	graph.sortClients();
-    	
-    	List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocated = new ArrayList<>();
-    	TwoTuple<Boolean, Integer> result = graph.costOfServerNodes(graph.getServers(), pcfClientAllocated);
+    	System.out.println(graph.printServers());
+    	List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocates = new ArrayList<>();
+    	TwoTuple<Boolean, Float> result = graph.costOfServerNodes(graph.getServers(), pcfClientAllocates);
+    	//默认所有节点都设置为服务器节点，如果不能满足则无解
     	if(! result.first){
     		return new String[]{"NA"};
     	}
     	
+    	graph.calculateDis();
+    	graph.createLeagues();
+    	graph.initLeagus();
+    	while(true){
+    		for(League league:graph.leagues){
+    			TwoTuple<Boolean, Integer> res = league.getBestServer(graph);
+    			System.out.println(res.first+" " + res.second);
+    		}
+    		if(false)
+    			break;
+    	}
     	
     	
+    	
+    	
+    	
+    	
+    	
+    	
+    	
+     	TwoTuple<Boolean, Float> oldResult = new TwoTuple<>(result.first, result.second);
+      	List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> oldPcfClientAllocates = new ArrayList<>(pcfClientAllocates);
+    	int repeatCount = 0;
     	graph.initAssessedValues();
     	
-    	while(true){
-    	
-	    	if(System.currentTimeMillis() - startTime > TIME_LIMIT)
+//    	GenenicAlg genenicAlg = new GenenicAlg(100, graph.nodesNum);
+//    	genenicAlg.initPopulation(graph);
+    	System.out.println(graph.printServers());
+    	//该网络图能解
+    	while(true){ 
+    		graph.updateBandWidth(oldPcfClientAllocates, UpdateBandwidthOperator.PLUS);
+    		pcfClientAllocates.clear();
+        	graph.flipNode();
+        	result = graph.costOfServerNodes(graph.getServers(), pcfClientAllocates);
+        	System.out.println(graph.printServers());
+        	System.out.println(result.first + " " + result.second);
+//        	System.out.println(result.second);
+        	if(result.first && result.second < oldResult.second){//找到更优的解
+        		System.out.println(result.second);
+        		oldResult = new TwoTuple<>(result.first, result.second);
+        		oldPcfClientAllocates = new ArrayList<>(pcfClientAllocates);
+//        	}else{
+//        		graph.updateBandWidth(pcfClientAllocates, UpdateBandwidthOperator.PLUS);
+//        		graph.flipNode(flipNodes);
+        	}
+	    	if(repeatCount++>10000)
 	    		break;
     	}
     	
     	StringBuffer sb = new StringBuffer();
-    	for(ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer> s: pcfClientAllocated)
+    	for(ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer> s: oldPcfClientAllocates)
     			sb.append("\n" + s.first.first +" "+ s.second +" "+ s.third);
-    	return new String[]{pcfClientAllocated.size()+"", sb.toString()};
+    	return new String[]{oldPcfClientAllocates.size()+"", sb.toString()};
     }
-    
+	
+	
+    public static Set<Integer> genRandomNodes(int num, int range){
+    	Set<Integer> list = new HashSet<>();
+    	Random random = new Random();
+    	while(list.size() != num)
+    		list.add(random.nextInt(range));
+    	return list;
+    }
 	
     /**
      * 读取网络节点数量、消费节点数量、服务器部署成本、网络链路数量。基于此信息初始化 Graph
