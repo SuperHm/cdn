@@ -468,8 +468,8 @@ public class Graph {
 
 
 class TwoTuple<A, B>{
-	A first;
-	B second;
+	final A first;
+	final B second;
 	public TwoTuple(A first, B second){
 		this.first = first;
 		this.second = second;
@@ -482,7 +482,7 @@ class TwoTuple<A, B>{
 }
 class  ThreeTuple<A,  B, C extends Comparable<? super C>> extends TwoTuple<A,  B>{
 	
-	C third;
+	final C third;
 	public ThreeTuple(A first, B second, C third){
 		super(first, second);
 		this.third = third;
