@@ -34,10 +34,8 @@ public class Deploy{
     	if(! result.first){
     		return new String[]{"NA"};
     	}
-    	
-    	graph.calculateDis();
     	graph.createLeagues();
-    	graph.initLeagus();
+    	graph.initLeagues();
     	while(true){
     		for(League league:graph.leagues){
     			TwoTuple<Boolean, Integer> res = league.getBestServer(graph);
@@ -58,7 +56,6 @@ public class Deploy{
      	TwoTuple<Boolean, Float> oldResult = new TwoTuple<>(result.first, result.second);
       	List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> oldPcfClientAllocates = new ArrayList<>(pcfClientAllocates);
     	int repeatCount = 0;
-    	graph.initAssessedValues();
     	
 //    	GenenicAlg genenicAlg = new GenenicAlg(100, graph.nodesNum);
 //    	genenicAlg.initPopulation(graph);
@@ -67,7 +64,6 @@ public class Deploy{
     	while(true){ 
     		graph.updateBandWidth(oldPcfClientAllocates, UpdateBandwidthOperator.PLUS);
     		pcfClientAllocates.clear();
-        	graph.flipNode();
         	result = graph.costOfServerNodes(graph.getServers(), pcfClientAllocates);
         	System.out.println(graph.printServers());
         	System.out.println(result.first + " " + result.second);

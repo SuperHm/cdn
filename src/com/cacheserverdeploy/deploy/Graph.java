@@ -42,10 +42,6 @@ public class Graph {
 	boolean[] isServer; //对应节点是否设置为服务器
 	
 
-
-	/*与节点评估值相关的信息*/
-	private int[] assessedValues; //存储每个节点的评估值
-	private int[] totalCost; //存储每个节点所有带宽的租用费用和
 	int[] totalFlow; //每个节点的能够提供的带宽和
 	int totalFlows;
 	int totalDemand;
@@ -53,6 +49,9 @@ public class Graph {
 	int[][] clientToNodesdis;
 	List<League> leagues;
 	Map<Integer, Integer> leagueID;
+	
+	int[] maxOffer;
+	int[] out;
 
 
 
@@ -67,9 +66,9 @@ public class Graph {
 		this.clientsNum = clientsNum;
 		this.nodesNum = nodesNum;
 		
+		this.out = new int[nodesNum];
+		this.maxOffer = new int[nodesNum];
 		
-		this.assessedValues = new int[nodesNum];
-		this.totalCost = new int[nodesNum];
 		this.totalFlow = new int[nodesNum];
 		this.totalFlows = 0;
 		this.isServer = new boolean[nodesNum];
@@ -100,11 +99,8 @@ public class Graph {
 		this.bandWidths[des][src] = bandWidth;
 		this.unitCosts[src][des] = unitCost;
 		this.unitCosts[des][src] = unitCost;
-		this.totalCost[src] += bandWidth * unitCost;
-		this.totalCost[des] += bandWidth * unitCost;
 		this.totalFlow[src] += bandWidth;
-		this.totalFlow[des] += bandWidth;
-		
+		this.totalFlow[des] += bandWidth;		
 	}
 	
 	public void addClient(int node, int linkedNode, int demand){
@@ -137,9 +133,10 @@ public class Graph {
 		}
 	}
 	
-	public void initLeagus(){
+	public void initLeagues(){
 		for(League league: leagues){
-			league.initOffer(this);
+			league.initOut(this);
+			league.initMaxoffer(this);
 		}
 	}
 	
@@ -152,10 +149,12 @@ public class Graph {
 	
 	
 	public void createLeagues(){
+		calculateDis();
 		boolean isVisited[] = new boolean[this.nodes.size()];
 		for(ThreeTuple<Integer, Integer, Integer> cld: this.clds){
 			League league = new League(cld.first, cld.third);
 			league.nodes.add(cld.second);
+			league.server = cld.second;
 			leagueID.put( cld.second, league.client);
 			isVisited[cld.second] = true;
 			this.leagues.add(league);
@@ -187,9 +186,6 @@ public class Graph {
 		this.isSolve = isSolve;
 	}
 	
-	public int[] getAssessedValues(){
-		return this.assessedValues;
-	}
 
 	/**
 	 * 将消费节点按照带宽需求排序
@@ -229,49 +225,6 @@ public class Graph {
 		}
 	}
 
-	public void flipNode(){
-		int maxNode = 0;
-		int minNode = 0;
-		int maxAssVal = 0;
-		int minAssVal = Integer.MAX_VALUE;
-		for(int i=0; i<nodesNum; i++){
-			if(assessedValues[i] > maxAssVal){
-				maxAssVal = assessedValues[i];
-				maxNode = i;
-			}
-			if(assessedValues[i] < minAssVal){
-				minAssVal = assessedValues[i];
-				minNode = i;
-			}
-		}
-		isServer[maxNode] = true;
-		isServer[minNode] = false;
-	}
-	
-	
-	
-	
-	
- 
-    
-	/**
-     * 初始化每个节点的评估值
-     * 初始评估值设置方法是 该节点流出流量值之和 + w*该节点出现在消费节点之间最短路径上的频次
-     * 其中，节点流出流量之和，在读取图的过程中已经初始化
-     */
-    public void initAssessedValues(){
-    	for(int i=0; i<this.nodesNum; i++){
-    		this.assessedValues[i] = this.totalFlow[i];
-    		this.totalFlows+=totalFlow[i];
-    	}
-    	for(int i=0; i<this.nodesNum; i++){
-//    		if(Math.random() > (double)totalFlow[i]/totalFlows)
-    			isServer[i] = false;
-    	}
-    	this.maxUnitCostOfDemand = ((float)serverCost*clientsNum)/(float)totalDemand;
-    	
-    }
-    
     
     /**
      * 计算某个server部署方案的成本
