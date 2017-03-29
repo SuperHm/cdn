@@ -7,7 +7,7 @@ import java.util.Random;
 import java.util.Set;
 
 import com.cacheserverdeploy.deploy.Graph;
-import com.cacheserverdeploy.deploy.Graph.UpdateBandwidthOperator;
+import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
 
 public class Deploy{
 	private static int lineNum = 0;//网络图读取过程中标记行数
@@ -62,7 +62,7 @@ public class Deploy{
     	System.out.println(graph.printServers());
     	//该网络图能解
     	while(true){ 
-    		graph.updateBandWidth(oldPcfClientAllocates, UpdateBandwidthOperator.PLUS);
+    		graph.updateBandWidth(oldPcfClientAllocates, UpdateOperator.PLUS);
     		pcfClientAllocates.clear();
         	result = graph.costOfServerNodes(graph.getServers(), pcfClientAllocates);
         	System.out.println(graph.printServers());

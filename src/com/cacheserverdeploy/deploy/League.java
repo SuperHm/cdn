@@ -10,7 +10,7 @@ import java.util.Map;
 
 import javax.xml.parsers.ParserConfigurationException;
 
-import com.cacheserverdeploy.deploy.Graph.UpdateBandwidthOperator;
+import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
 
 
 public class League {
@@ -100,6 +100,7 @@ public class League {
 	
 	public void initOut(Graph graph){
 		for(int innerNode: nodes){
+			
 			for(int node: graph.getNodes()){
 				if(!this.nodes.contains(node) && graph.bandWidths[innerNode][node] != 0){
 					graph.out[innerNode] += graph.bandWidths[innerNode][node];
@@ -185,42 +186,23 @@ public class League {
 				}
 			});
 			ThreeTuple<String, Integer, Integer> opti_pcf = offers.get(0);
-
+		
 			int real = Math.min(opti_pcf.third, need);
-			graph.updateBandWidth(opti_pcf.first, real, UpdateBandwidthOperator.MINUS);
-			graph.updateMaxOffer(opti_pcf.first);
+			graph.updateBandWidth(opti_pcf.first, real, UpdateOperator.MINUS);
+			graph.updateMaxOffer(opti_pcf.first, opti_pcf.third, UpdateOperator.MINUS);
 			need -= opti_pcf.third;
 			cost += opti_pcf.second * real;
+			System.out.println("path:"+opti_pcf.first+" cost:"+opti_pcf.second+" flow:"+real);
 			if(need <= 0 || cost>graph.serverCost)
 				break;
 		}
-//		if(acquires.size() !=0){
-//			int totalAc = 0;
-//			int totalCost = 0;
-//			for(Map<Integer, List<ThreeTuple<String, Integer, Integer>>> acquire:acquires.values()){
-//				for(int des: acquire.keySet()){
-//					for(ThreeTuple<String, Integer, Integer> pcf: acquire.get(des)){
-//						int alloc = Math.min(pcf.third, graph.maxOffer[0]);
-//						totalAc += alloc;
-//						totalCost = pcf.second * alloc;
-//					}
-//				}
-//			}
-//			//不设置服务器
-//			if(totalAc > demand && totalCost <  graph.serverCost){
-//				//撤销联盟内设置的server
-//				if(setServer){
-//					setServer = false;
-//					server = -1;
-//					for(int neighborID: neighbors.keySet()){
-//						League neighbor = graph.getLeague(neighborID);
-//						neighbor.acquires.remove(client);
-//					}
-//				}
-//				
-//				return new TwoTuple<>(false, 0);
-//			}
-//		}
+		
+		//租用流量比设立服务器划算
+		if(need<=0 && cost<graph.serverCost){
+			
+		}else{
+			
+		}
 		server = nodes.get(0);
 		System.out.println(server+"->消费节点"+client+"   带宽："+demand);
 		this.setServer = true;
@@ -265,19 +247,19 @@ public class League {
 			list.add(pcf);
 			if(pcf.third == Graph.MAX_VALUE)
 				break;
-			updateFlow(pcf.first, pcf.third, UpdateBandwidthOperator.MINUS);
+			updateFlow(pcf.first, pcf.third, UpdateOperator.MINUS);
 		}
 		return list;
 	}
 	
 	
-	public void updateFlow(String path, int increment, UpdateBandwidthOperator operator){
+	public void updateFlow(String path, int increment, UpdateOperator operator){
 		int src, des;
 		String[] pathNodesStr = path.split(" ");
 		for(int ii=0; ii<pathNodesStr.length-1; ii++){
 			src = nodes.indexOf(Integer.parseInt(pathNodesStr[ii]));//起始节点
 			des = nodes.indexOf(Integer.parseInt(pathNodesStr[ii+1])); //终止节点
-			if(operator == UpdateBandwidthOperator.MINUS){
+			if(operator == UpdateOperator.MINUS){
 				flow[src][des] = flow[src][des] - increment;
 			}else{
 				flow[src][des] = flow[src][des] + increment;

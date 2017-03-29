@@ -25,7 +25,7 @@ import com.sun.org.apache.xpath.internal.operations.Bool;
  *
  */
 public class Graph {
-	enum UpdateBandwidthOperator{
+	enum UpdateOperator{
 	    	MINUS, PLUS;
 	}
 	final static int MAX_VALUE = 100000;
@@ -140,14 +140,17 @@ public class Graph {
 		}
 	}
 	
-	public void updateMaxOffer(String path){
+	public void updateMaxOffer(String path, int flow, UpdateOperator operator){
 		String[] nodesStr = path.split(" ");
-		int src = Integer.parseInt(nodesStr[0]);
-		int des = Integer.parseInt(nodesStr[nodesStr.length-1]);
-		League leagueSrc = getLeague(leagueID.get(src));
-		League leagueDes = getLeague(leagueID.get(des));
-		leagueSrc.initMaxoffer(this);
-		leagueDes.initMaxoffer(this);
+		for(int i=0; i<nodesStr.length-1; i++){
+			int src = Integer.parseInt(nodesStr[i]);
+			if(operator==UpdateOperator.MINUS){
+				maxOffer[src] -= flow;
+			}else{
+				maxOffer[src] += flow;
+			}
+		}
+		
 	}
 	
 	public League getLeague(int id){
@@ -216,20 +219,20 @@ public class Graph {
 	 * @param increment 增量
 	 * @param operator 增加或者减少
 	 */
-	public void updateBandWidth(String path, int increment, UpdateBandwidthOperator operator){
+	public void updateBandWidth(String path, int increment, UpdateOperator operator){
 		int src, des;
 		String[] pathNodesStr = path.split(" ");
 		for(int ii=0; ii<pathNodesStr.length-1; ii++){
 			src = Integer.parseInt(pathNodesStr[ii]);//起始节点
 			des = Integer.parseInt(pathNodesStr[ii+1]); //终止节点
-			if(operator == UpdateBandwidthOperator.MINUS){
+			if(operator == UpdateOperator.MINUS){
 				bandWidths[src][des] = bandWidths[src][des] - increment;
 			}else{
 				bandWidths[src][des] = bandWidths[src][des] + increment;
 			}
 		}
 	}
-	public void updateBandWidth(List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocates, UpdateBandwidthOperator operator){
+	public void updateBandWidth(List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocates, UpdateOperator operator){
 		for(ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer> pcfCA:pcfClientAllocates){
 			updateBandWidth(pcfCA.first.first, pcfCA.third, operator);
 		}
@@ -268,7 +271,7 @@ public class Graph {
         		}
         		need = demand - obtained;
     			allocated = pcf.third >  need ? need : pcf.third;//按需求分配带宽，若路径剩余带宽大于仍需要的带宽，仅需分配仍需要的带宽即可
-        		updateBandWidth(pcf.first, allocated, UpdateBandwidthOperator.MINUS); //更新边上剩余带宽
+        		updateBandWidth(pcf.first, allocated, UpdateOperator.MINUS); //更新边上剩余带宽
         		totalCost += pcf.second * allocated;
 //        		System.out.println(pcf.first +" "+clds.get(i).first+ " " + realFlow);
 //        		outStrsTmp.add("\r\n"+pcf.first +" "+clds.get(i).first+ " " + realFlow);
