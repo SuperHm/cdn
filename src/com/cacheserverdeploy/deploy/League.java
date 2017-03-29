@@ -181,12 +181,14 @@ public class League {
 	 		Collections.sort(offers, new Comparator<ThreeTuple<String, Integer, Integer>>() {
 				@Override
 				public int compare(ThreeTuple<String, Integer, Integer> o1, ThreeTuple<String, Integer, Integer> o2) {
-					// TODO Auto-generated method stub
 					return o1.second-o2.second;
 				}
 			});
 			ThreeTuple<String, Integer, Integer> opti_pcf = offers.get(0);
+
 			int real = Math.min(opti_pcf.third, need);
+			graph.updateBandWidth(opti_pcf.first, real, UpdateBandwidthOperator.MINUS);
+			graph.updateMaxOffer(opti_pcf.first);
 			need -= opti_pcf.third;
 			cost += opti_pcf.second * real;
 			if(need <= 0 || cost>graph.serverCost)
@@ -225,6 +227,9 @@ public class League {
 //		updateNeighborsAcquires(graph);
 		return new TwoTuple<>(true, server);
 	}
+	
+	
+	
 	public void initMaxoffer(Graph graph){
 		List<ThreeTuple<String, Integer, Integer>> list = null;
 		for(int innerNode: nodes){			

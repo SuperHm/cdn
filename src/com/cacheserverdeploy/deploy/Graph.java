@@ -140,6 +140,16 @@ public class Graph {
 		}
 	}
 	
+	public void updateMaxOffer(String path){
+		String[] nodesStr = path.split(" ");
+		int src = Integer.parseInt(nodesStr[0]);
+		int des = Integer.parseInt(nodesStr[nodesStr.length-1]);
+		League leagueSrc = getLeague(leagueID.get(src));
+		League leagueDes = getLeague(leagueID.get(des));
+		leagueSrc.initMaxoffer(this);
+		leagueDes.initMaxoffer(this);
+	}
+	
 	public League getLeague(int id){
 		for(League league: leagues)
 			if(league.client == id)
