@@ -1,5 +1,6 @@
 package com.cacheserverdeploy.deploy;
 
+import java.awt.FlowLayout;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -144,16 +145,15 @@ public class Graph {
 		}
 	}
 	
-	public void updateMaxOffer(String path, int flow, UpdateOperator operator){
-		String[] nodesStr = path.split(" ");
-		for(int i=0; i<nodesStr.length-1; i++){
-			int src = Integer.parseInt(nodesStr[i]);
-			if(operator==UpdateOperator.MINUS){
-				maxOffer[src] -= flow;
-			}else{
-				maxOffer[src] += flow;
-			}
-		}
+	public void updateMaxOffer(String path, int flow){
+		String[] nodesStr = path.split("->")[0].split(" ");
+		int endNode = Integer.parseInt(nodesStr[nodesStr.length-1]);
+		maxOffer[endNode] -= flow;
+		nodesStr = path.replaceFirst("->", " ").split(" ");
+		int startNode = Integer.parseInt(nodesStr[0]);
+		League league = getLeague(leagueID.get(startNode));
+		league.initMaxoffer(this);
+		
 		
 	}
 	
@@ -233,7 +233,7 @@ public class Graph {
     	Collections.sort(this.clds, new Comparator<ThreeTuple<Integer, Integer, Integer>>() {
 			@Override
 			public int compare(ThreeTuple<Integer, Integer, Integer> o1, ThreeTuple<Integer, Integer, Integer> o2) {
-				return o2.third - o1.third;
+				return o1.third - o2.third;
 			}
 		});
 	}

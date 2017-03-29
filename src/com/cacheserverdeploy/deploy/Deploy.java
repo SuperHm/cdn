@@ -36,54 +36,16 @@ public class Deploy{
     	}
     	graph.createLeagues();
     	graph.initLeagues();
-    	while(true){
-    		for(League league:graph.leagues){
-    			TwoTuple<Boolean, Integer> res = league.getBestServer(graph);
-    			System.out.println(res.first+" " + res.second);
-    		}
-    		if(false)
-    			break;
+    	for(League league:graph.leagues){
+    		TwoTuple<Boolean, Integer> res = league.getBestServer(graph);
+    		System.out.println(res.first+" " + res.second);
     	}
     	
     	
     	
     	
-    	
-    	
-    	
-    	
-    	
-     	TwoTuple<Boolean, Float> oldResult = new TwoTuple<>(result.first, result.second);
-      	List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> oldPcfClientAllocates = new ArrayList<>(pcfClientAllocates);
-    	int repeatCount = 0;
-    	
-//    	GenenicAlg genenicAlg = new GenenicAlg(100, graph.nodesNum);
-//    	genenicAlg.initPopulation(graph);
-    	System.out.println(graph.printServers());
-    	//该网络图能解
-    	while(true){ 
-    		graph.updateBandWidth(oldPcfClientAllocates, UpdateOperator.PLUS);
-    		pcfClientAllocates.clear();
-        	result = graph.costOfServerNodes(graph.getServers(), pcfClientAllocates);
-        	System.out.println(graph.printServers());
-        	System.out.println(result.first + " " + result.second);
-//        	System.out.println(result.second);
-        	if(result.first && result.second < oldResult.second){//找到更优的解
-        		System.out.println(result.second);
-        		oldResult = new TwoTuple<>(result.first, result.second);
-        		oldPcfClientAllocates = new ArrayList<>(pcfClientAllocates);
-//        	}else{
-//        		graph.updateBandWidth(pcfClientAllocates, UpdateBandwidthOperator.PLUS);
-//        		graph.flipNode(flipNodes);
-        	}
-	    	if(repeatCount++>10000)
-	    		break;
-    	}
-    	
-    	StringBuffer sb = new StringBuffer();
-    	for(ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer> s: oldPcfClientAllocates)
-    			sb.append("\n" + s.first.first +" "+ s.second +" "+ s.third);
-    	return new String[]{oldPcfClientAllocates.size()+"", sb.toString()};
+
+    	return new String[]{0+""};
     }
 	
 	

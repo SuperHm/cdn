@@ -78,14 +78,14 @@ public class League {
 					}
 					while(flow!=0){
 						if(flow <= pcfToDes.third){
-							offers.add(new ThreeTuple<>(pcfFromSrc.first+" "+pcfToDes.first,
+							offers.add(new ThreeTuple<>(pcfFromSrc.first+"->"+pcfToDes.first,
 									pcfFromSrc.second + pcfToDes.second + graph.unitCosts[src][des],
 									flow));
 							need-=flow;
 							pcfToDes = new ThreeTuple<>(pcfToDes.first, pcfToDes.second, pcfToDes.third-flow);
 							break;
 						}else{
-							offers.add(new ThreeTuple<>(pcfFromSrc.first+" "+pcfToDes.first,
+							offers.add(new ThreeTuple<>(pcfFromSrc.first+"->"+pcfToDes.first,
 									pcfFromSrc.second + pcfToDes.second + graph.unitCosts[src][des],
 									pcfToDes.third));
 							need-=pcfToDes.third;
@@ -125,11 +125,11 @@ public class League {
 			ThreeTuple<String, Integer, Integer> opti_pcf = offers.get(0);
 		
 			int real = Math.min(opti_pcf.third, need);
-			graph.updateBandWidth(opti_pcf.first, real, UpdateOperator.MINUS);
-			graph.updateMaxOffer(opti_pcf.first, opti_pcf.third, UpdateOperator.MINUS);
+			graph.updateBandWidth(opti_pcf.first.replaceFirst("->", " "), real, UpdateOperator.MINUS);
+			graph.updateMaxOffer(opti_pcf.first, opti_pcf.third);
 			need -= opti_pcf.third;
 			cost += opti_pcf.second * real;
-			optiPaths.add(new ThreeTuple<>(opti_pcf.first, opti_pcf.second, real));
+			optiPaths.add(new ThreeTuple<>(opti_pcf.first.replaceFirst("->", " "), opti_pcf.second, real));
 			if(need <= 0 || cost>graph.serverCost)
 				break;
 		}
@@ -163,13 +163,15 @@ public class League {
 	
 	public TwoTuple<Boolean, Integer> setNodeAsServer(int node, Graph graph){
 		int innerCost = 0;
-		int flow = 0;
+		int need = demand;
 		List<ThreeTuple<String, Integer, Integer>> pcfs = getPaths(nodes.indexOf(node), 0);
 		for(ThreeTuple<String, Integer, Integer> pcf: pcfs){
-			innerCost += pcf.second;
-			flow += pcf.third;
+			innerCost += pcf.second *  Math.min(pcf.third, need);
+			need -= pcf.third;
+			if(need<=0)
+				break;
 		}
-		if(flow >= demand){
+		if(need<=0){
 			return new TwoTuple<>(true, innerCost);
 		}else{
 			return new TwoTuple<>(false, innerCost);
