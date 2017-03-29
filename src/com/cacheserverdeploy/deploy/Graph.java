@@ -52,6 +52,8 @@ public class Graph {
 	
 	int[] maxOffer;
 	int[] out;
+	int[] nodeFlow;
+	int[] nodeCost;
 
 
 
@@ -68,6 +70,8 @@ public class Graph {
 		
 		this.out = new int[nodesNum];
 		this.maxOffer = new int[nodesNum];
+		this.nodeFlow = new int[nodesNum];
+		this.nodeCost = new int[nodesNum];
 		
 		this.totalFlow = new int[nodesNum];
 		this.totalFlows = 0;
@@ -153,6 +157,27 @@ public class Graph {
 		
 	}
 	
+	public void plusNodeFlow(ThreeTuple<String, Integer, Integer> pcf){
+		String[] nodeStrs = pcf.first.split(" ");
+		int cost = 0;
+		int node = Integer.parseInt(nodeStrs[0]);
+		nodeFlow[node] += pcf.third;
+		int i=0;
+		int nextNode=0;
+		for(i=1; i<nodeStrs.length-1; i++){
+			nextNode = Integer.parseInt(nodeStrs[i]);
+			nodeFlow[nextNode] += pcf.third;
+			cost += unitCosts[node][nextNode] * pcf.third;
+			nodeCost[nextNode] += cost;	
+			node = nextNode;
+		}
+		int lastNode = Integer.parseInt(nodeStrs[i]);
+		cost += unitCosts[nextNode][lastNode] * pcf.third;
+		nodeCost[lastNode] += cost;
+	}
+	
+
+	
 	public League getLeague(int id){
 		for(League league: leagues)
 			if(league.client == id)
@@ -168,6 +193,7 @@ public class Graph {
 			League league = new League(cld.first, cld.third);
 			league.nodes.add(cld.second);
 			league.server = cld.second;
+			league.setServer = true;
 			leagueID.put( cld.second, league.client);
 			isVisited[cld.second] = true;
 			this.leagues.add(league);

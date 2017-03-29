@@ -1,14 +1,11 @@
 package com.cacheserverdeploy.deploy;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import javax.xml.parsers.ParserConfigurationException;
 
 import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
 
@@ -22,7 +19,6 @@ public class League {
 	int[][] flow;
 	int[][] cost;
 	Map<Integer, List<TwoTuple<Integer, Integer>>> neighbors;
-//	Map<Integer, Map<Integer, List<ThreeTuple<String, Integer, Integer>>>> acquires;
 	Map<Integer, List<ThreeTuple<String, Integer, Integer>>> offers;
 	
 	
@@ -32,75 +28,10 @@ public class League {
 		this.nodes = new ArrayList<>();
 		this.offers = new HashMap<>();
 		this.neighbors = new HashMap<>();
-//		this.acquires = new HashMap<>();
 	}
-	
 
-	
-
-	
-//	public void updateNeighborsAcquires(Graph graph){
-//		if(neighbors.size()==0)
-//			return;
-//		Map<Integer, List<ThreeTuple<String, Integer, Integer>>> offer = offers.get(server);
-//		for(int neighborID: neighbors.keySet()){
-//			League neighbor = graph.getLeague(neighborID);
-//			List<ThreeTuple<String, Integer, Integer>> list = null;
-//			Map<Integer, List<ThreeTuple<String, Integer, Integer>>> acquire = new HashMap<>();
-//			for(TwoTuple<Integer, Integer> src_des: neighbors.get(neighborID)){
-//				list = new ArrayList<>();
-//				int src = src_des.first;
-//				int des = src_des.second;
-//				int maxOffer = Math.min(maxOutOffer[serverIdx][nodes.indexOf(src)],
-//						graph.bandWidths[src][des]);
-//				ThreeTuple<String, Integer, Integer> pcfToDes = null;
-//				List<ThreeTuple<String, Integer, Integer>> pcfsToDes = new ArrayList<>(neighbor.offers.get(des).get(neighbor.nodes.get(0)));
-//				int need = maxOffer;
-//				pcfToDes = pcfsToDes.get(0);
-//				boolean noPath = false;
-//				for(ThreeTuple<String, Integer, Integer> pcfFromSrc: offer.get(src)){
-//					int flow = pcfFromSrc.third;
-//					if(flow>need){
-//						flow = need;
-//						noPath = true;
-//					}
-//					while(flow!=0){
-//						if(flow < pcfToDes.third){
-//							list.add(new ThreeTuple<>(pcfFromSrc.first+" "+pcfToDes.first,
-//									pcfFromSrc.second + pcfToDes.second + graph.unitCosts[src][des],
-//									flow));
-//							need-=flow;
-//							pcfToDes = new ThreeTuple<>(pcfToDes.first, pcfToDes.second, pcfToDes.third-flow);
-//							break;
-//						}else{
-//							list.add(new ThreeTuple<>(pcfFromSrc.first+" "+pcfToDes.first,
-//									pcfFromSrc.second + pcfToDes.second + graph.unitCosts[src][des],
-//									pcfToDes.third));
-//							need-=pcfToDes.third;
-//							flow -= pcfToDes.third;
-//							pcfsToDes.remove(0);
-//							if(pcfsToDes.size()==0){
-//								noPath = true;
-//								break;
-//							}
-//							pcfToDes = pcfsToDes.get(0);
-//						}
-//					}
-//					if(noPath)
-//						break;
-//				}
-//				acquire.put(des, list);
-//				
-//			}
-//			neighbor.acquires.put(client, acquire);
-//			
-//		}
-//	}
-	
-	
 	public void initOut(Graph graph){
 		for(int innerNode: nodes){
-			
 			for(int node: graph.getNodes()){
 				if(!this.nodes.contains(node) && graph.bandWidths[innerNode][node] != 0){
 					graph.out[innerNode] += graph.bandWidths[innerNode][node];
@@ -124,6 +55,8 @@ public class League {
 		List<ThreeTuple<String, Integer, Integer>> offers = new ArrayList<>();
 		for(int neighborID:neighbors.keySet()){
 			League neighbor = graph.getLeague(neighborID);
+			if(!neighbor.setServer)
+				continue;
 			List<TwoTuple<Integer, Integer>> src_desList = neighbors.get(neighborID);
 			for(TwoTuple<Integer, Integer> des_src: src_desList){
 				int src = des_src.second;
@@ -177,8 +110,12 @@ public class League {
 	public TwoTuple<Boolean, Integer> getBestServer(Graph graph){
  		int need = demand;
  		int cost = 0;
+ 		List<ThreeTuple<String, Integer, Integer>> optiPaths = new ArrayList<>();
 		while(true){
 	 		List<ThreeTuple<String, Integer, Integer>> offers = getOffers(graph);
+	 		if(offers.size()==0){
+	 			break;
+	 		}
 	 		Collections.sort(offers, new Comparator<ThreeTuple<String, Integer, Integer>>() {
 				@Override
 				public int compare(ThreeTuple<String, Integer, Integer> o1, ThreeTuple<String, Integer, Integer> o2) {
@@ -192,24 +129,52 @@ public class League {
 			graph.updateMaxOffer(opti_pcf.first, opti_pcf.third, UpdateOperator.MINUS);
 			need -= opti_pcf.third;
 			cost += opti_pcf.second * real;
-			System.out.println("path:"+opti_pcf.first+" cost:"+opti_pcf.second+" flow:"+real);
+			optiPaths.add(new ThreeTuple<>(opti_pcf.first, opti_pcf.second, real));
 			if(need <= 0 || cost>graph.serverCost)
 				break;
 		}
 		
-		//租用流量比设立服务器划算
+		//租用流量
 		if(need<=0 && cost<graph.serverCost){
-			
+			setServer = false;
+			for(ThreeTuple<String, Integer, Integer> optiPath: optiPaths){
+				graph.plusNodeFlow(optiPath);
+				System.out.println("path:"+optiPath.first+"->client:"+client+" cost:"+optiPath.second+" flow:"+optiPath.third);
+			}
+			offers.clear();
+			return new TwoTuple<>(false, -1);
 		}else{
-			
+		//设立服务器
+			setServer = true;
+			int maxInnerCost = Integer.MAX_VALUE;
+			TwoTuple<Boolean, Integer> result = null;
+			for(int node:nodes){
+				result = setNodeAsServer(node, graph);
+				if(result.first && result.second-graph.nodeCost[node] < maxInnerCost){
+					server = node;
+					maxInnerCost = result.second-graph.nodeCost[node];
+				}
+			}
+			System.out.println(server+"->client:"+client+" cost: 0"+" flow："+demand);
+			return new TwoTuple<>(true, server);
 		}
-		server = nodes.get(0);
-		System.out.println(server+"->消费节点"+client+"   带宽："+demand);
-		this.setServer = true;
-//		updateNeighborsAcquires(graph);
-		return new TwoTuple<>(true, server);
 	}
 	
+	
+	public TwoTuple<Boolean, Integer> setNodeAsServer(int node, Graph graph){
+		int innerCost = 0;
+		int flow = 0;
+		List<ThreeTuple<String, Integer, Integer>> pcfs = getPaths(nodes.indexOf(node), 0);
+		for(ThreeTuple<String, Integer, Integer> pcf: pcfs){
+			innerCost += pcf.second;
+			flow += pcf.third;
+		}
+		if(flow >= demand){
+			return new TwoTuple<>(true, innerCost);
+		}else{
+			return new TwoTuple<>(false, innerCost);
+		}
+	}
 	
 	
 	public void initMaxoffer(Graph graph){
@@ -300,7 +265,6 @@ public class League {
     	}
     	
     	boolean isVisited[] = new boolean[nodesNum];//标记节点最短距离是否求出
-    	
     	//初始化节点 src 到其他节点的距离为无穷大
     	for(int i=0; i<unitCosts.length; i++){
     		unitCosts[i] = Integer.MAX_VALUE;
