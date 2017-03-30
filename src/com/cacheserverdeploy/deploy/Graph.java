@@ -4,8 +4,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 
 
@@ -34,7 +36,7 @@ public class Graph {
 	List<Integer> nodes;//图中所有非消费节点
 	int[][] bandWidths;
 	int[][] unitCosts;
-	List<ThreeTuple<Integer, Integer, Integer>> clds;	//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
+	List<CLD> clds;	//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
 	
 	boolean[] isServer; 
 	
@@ -43,6 +45,7 @@ public class Graph {
 	int[] nodeFlow;
 	int[] nodeCost;
 	boolean changed;
+    Set<Integer> satNodes;
 
 
 
@@ -63,7 +66,7 @@ public class Graph {
 		this.nodeCost = new int[nodesNum];
 		
 		this.isServer = new boolean[nodesNum];
-		
+		this.satNodes = new HashSet<>();
 		for(int i=0; i<nodesNum; i++){
 			nodes.add(i);
 			bandWidths[i][i] = MAX_VALUE;
@@ -71,17 +74,6 @@ public class Graph {
 		
 	}
 	
-	
-	
-	
-	public String printServers() {
-		StringBuffer sb = new StringBuffer();
-		for(int i=0; i<nodesNum; i++)
-			if(isServer[i])
-			sb.append(i+" ");
-		return sb.toString();
-			
-	}
 	public void addEdge(int src, int des, int bandWidth, int unitCost){
 		this.bandWidths[src][des] = bandWidth;
 		this.bandWidths[des][src] = bandWidth;
@@ -94,7 +86,7 @@ public class Graph {
 	public void addClient(int node, int linkedNode, int demand){
 		this.out[linkedNode] += demand;
 		this.isServer[linkedNode] = true;
-		this.clds.add(new ThreeTuple<>(node, linkedNode, demand));
+		this.clds.add(new CLD(node, linkedNode, demand));
 		
 	}
 
@@ -108,24 +100,22 @@ public class Graph {
 		return serverList;
 	}
 	
-	public void plusNodeFlow(ThreeTuple<String, Integer, Integer> pcf){
-		String[] nodeStrs = pcf.first.split(" ");
+	public void plusNodeFlow(PCF pcf){
+		String[] nodeStrs = pcf.path.split(" ");
 		int cost = 0;
 		int node = Integer.parseInt(nodeStrs[0]);
-		nodeFlow[node] += pcf.third;
+		nodeFlow[node] += pcf.flow;
 		int i=0;
 		int nextNode=0;
 		for(i=1; i<nodeStrs.length-1; i++){
 			nextNode = Integer.parseInt(nodeStrs[i]);
-			nodeFlow[nextNode] += pcf.third;
-			cost += unitCosts[node][nextNode] * pcf.third;
+			nodeFlow[nextNode] += pcf.flow;
+			cost += unitCosts[node][nextNode] * pcf.flow;
 			nodeCost[nextNode] += cost;	
-//			if(nodeCost[nextNode] > serverCost)
-//				isServer[nextNode] = true;
 			node = nextNode;
 		}
 		int lastNode = Integer.parseInt(nodeStrs[i]);
-		cost += unitCosts[nextNode][lastNode] * pcf.third;
+		cost += unitCosts[nextNode][lastNode] * pcf.flow;
 		nodeCost[lastNode] += cost;
 	}
 	
@@ -136,10 +126,10 @@ public class Graph {
 	 * 将消费节点按照带宽需求排序
 	 */
 	public void sortClients(){
-    	Collections.sort(this.clds, new Comparator<ThreeTuple<Integer, Integer, Integer>>() {
+    	Collections.sort(this.clds, new Comparator<CLD>() {
 			@Override
-			public int compare(ThreeTuple<Integer, Integer, Integer> o1, ThreeTuple<Integer, Integer, Integer> o2) {
-				return o1.third - o2.third;
+			public int compare(CLD o1, CLD o2) {
+				return o1.demand - o2.demand;
 			}
 		});
 	}
@@ -165,98 +155,130 @@ public class Graph {
 		}
 	}
 
-    public 	Map<Integer, List<ThreeTuple<String, Integer, Integer>>>  getBestServers(){
-       Map<Integer, List<ThreeTuple<String, Integer, Integer>>> clientPaths = new HashMap<>();
-    	for(ThreeTuple<Integer, Integer, Integer> cld: clds){
-    		List<ThreeTuple<String, Integer, Integer>> optiPaths = new ArrayList<>();
-    		ThreeTuple<String, Integer, Integer> optPcf = null;
-    		int need = cld.third;
-    		int linkedNode = cld.second;
-    		int client = cld.first;
+    public 	Map<Integer, List<PCF>>  getBestServers(){
+      Map<Integer, ArrayList<TwoTuple<PCF, Integer>>> rends = new HashMap<>();
+       Map<Integer, List<PCF>> clientPaths = new HashMap<>();
+       nodeCost = new int[nodesNum];
+       nodeFlow = new int[nodesNum];
+       List<CLD> unsatClds = new ArrayList<>(clds);
+       while(unsatClds.size()!=0){
+    		CLD cld = unsatClds.get(0);
+    		List<PCF> optiPaths = new ArrayList<>();
+    		PCF optPcf = null;
+    		int need = cld.demand;
+    		int linkedNode = cld.linked;
+    		int client = cld.client;
     		int cost = 0;
     		while(true){
     			optPcf = getOptPath(linkedNode);
     			if(optPcf==null)
     				break;
-    			int real = Math.min(optPcf.third, need);
-    			optiPaths.add(new ThreeTuple<>(optPcf.first, optPcf.second, real));
+    			int real = Math.min(optPcf.flow, need);
+    			optiPaths.add(new PCF(optPcf.path, optPcf.cost, real));
     			
-    			updateBandWidth(optPcf.first, real, UpdateOperator.MINUS);
+    			updateBandWidth(optPcf.path, real, UpdateOperator.MINUS);
     			need-=real;
-    			cost += real * optPcf.second;
+    			cost += real * optPcf.cost;
     			if(need <= 0 || cost > serverCost)
     				break;
     		}
     		//租用流量
-    		if(need <= 0 && cost < serverCost){
-    			if(nodeFlow[linkedNode]>0)
-    				changed = true;
-    			isServer[linkedNode] = false;
-    			for(ThreeTuple<String, Integer, Integer> optiPath: optiPaths){
-    				plusNodeFlow(optiPath);
+    		if(need <= 0 && cost + nodeCost[linkedNode]< serverCost){
+    			//告知其租用流量的用户，不再提供流量
+    			List<TwoTuple<PCF, Integer>> pcfClients = rends.get(linkedNode);
+    			if(pcfClients != null){
+	    			for(TwoTuple<PCF, Integer> pcfClient: pcfClients){
+	    				String[] nodeStrs = pcfClient.fir.path.split(" ");
+	    				int link = Integer.parseInt(nodeStrs[nodeStrs.length-1]);
+	    				unsatClds.add(new CLD(pcfClient.sec, link, pcfClient.fir.flow));
+	    				updateBandWidth(pcfClient.fir.path, pcfClient.fir.flow, UpdateOperator.PLUS);
+	    			}
     			}
+    			isServer[linkedNode] = false;
+    			
+    			//注册租用信息
+    			ArrayList<TwoTuple<PCF, Integer>> list = null;
+    			for(PCF optiPath: optiPaths){
+    				plusNodeFlow(optiPath);
+    				String[] nodeStrs = optiPath.path.split(" ");
+    				int src = Integer.parseInt(nodeStrs[0]);
+    				if(!rends.keySet().contains(src)){
+    					rends.put(src, new ArrayList<>());
+    				}
+    				list = rends.get(src);
+    				list.add(new TwoTuple<>(optiPath, client));
+    				rends.put(src, list);
+    			}
+    			
     		}else{
     		//设立服务器
-    			for(ThreeTuple<String, Integer, Integer> optiPath: optiPaths){
-    				updateBandWidth(optiPath.first, optiPath.third, UpdateOperator.PLUS);
+    			for(PCF optiPath: optiPaths){
+    				updateBandWidth(optiPath.path, optiPath.flow, UpdateOperator.PLUS);
     			}
     			optiPaths.clear();
-    			optiPaths.add(new ThreeTuple<>(linkedNode+"", 0, cld.third));
+    			optiPaths.add(new PCF(linkedNode+"", 0, cld.demand));
+    			isServer[linkedNode] = true;
     		}
     		clientPaths.put(client, optiPaths);
+    		unsatClds.remove(cld);
     	}
     	return clientPaths;
 	}
     
-    public boolean update(){
-    	int maxNodeCost = serverCost;
-    	int maxNode = -1;
+    public void update(){
     	for(int node: nodes){
-    		if(nodeCost[node] > maxNodeCost){
-    			maxNode = node;
-    			maxNodeCost = nodeCost[node];
+    		if(nodeCost[node] > serverCost){
+    			if(!isServer[node]){
+    				System.out.println(node);
+    				changed = true;
+    			}
+	    		isServer[node] = true;
+	    		System.out.println(node + " set server!");
     		}
-    	}
-    	if(maxNode == -1){
-    		return false;
-    	}else{
-    		isServer[maxNode] = true;
-    		System.out.println(maxNode + " set server!");
-    		return true;
     	}
     }
     
     
+    public String printServers(){
+    	StringBuilder sb = new StringBuilder();
+    	for(int node:nodes){
+    		if(isServer[node])
+    			sb.append(node+" ");
+    	}
+    	return sb.toString();
+    }
     
-    public ThreeTuple<String, Integer, Integer> getOptPath(int src){
+    
+    
+    public PCF getOptPath(int src){
     	List<Integer> servers = getServers();
     	if(servers.contains(src))
     		servers.remove(new Integer(src));
-    	List<ThreeTuple<String, Integer, Integer>> paths = new ArrayList<>();
+    	List<PCF> paths = new ArrayList<>();
     	for(int node: servers){
-    		ThreeTuple<String, Integer, Integer> path =  getPath(node, src);
+    		PCF path =  getPath(node, src);
     		if(path != null)
     			paths.add(path);
     	}
 		if(paths.size()==0)
 			return null;
-		Collections.sort(paths, new Comparator<ThreeTuple<String, Integer, Integer>>() {
+		Collections.sort(paths, new Comparator<PCF>() {
 			@Override
-			public int compare(ThreeTuple<String, Integer, Integer> o1, ThreeTuple<String, Integer, Integer> o2) {
-				return o1.second - o2.second;
+			public int compare(PCF o1, PCF o2) {
+				return o1.cost - o2.cost;
 			}
 		});
 		return paths.get(0);
 	}
 	
-	private ThreeTuple<String, Integer, Integer> getPath(int src, int des){
+	private PCF getPath(int src, int des){
     	int[] costs = new int[nodes.size()];
     	int[] flows = new int[nodes.size()];
     	String[] shortPaths = new String[nodes.size()];
     	//dijkstra方法计算结果是 src 到所有顶点的最短距离
     	dijkstra(src, shortPaths, costs, flows);
     	if(costs[des] != Graph.MAX_VALUE)
-    		return new ThreeTuple<String, Integer, Integer>(shortPaths[des], costs[des], flows[des]);
+    		return new PCF(shortPaths[des], costs[des], flows[des]);
     	return null;
 	}
     
@@ -320,29 +342,47 @@ public class Graph {
 
 
 
+class PCF{
+	final String path;
+	final int cost;
+	final int flow;
+	public PCF(String path, int cost, int flow){
+		this.path = path;
+		this.cost = cost;
+		this.flow = flow;
+	}
+	@Override
+	public String toString(){
+		return path + " " +cost + " " + flow;
+	}
+}
+
+class CLD{
+	final int client;
+	final int linked;
+	final int demand;
+	public CLD(int client, int linked, int demand){
+		this.client = client;
+		this.linked = linked;
+		this.demand = demand;
+	}
+	@Override
+	public String toString(){
+		return client + " " +linked + " " + demand;
+	}
+}
+
 class TwoTuple<A, B>{
-	final A first;
-	final B second;
-	public TwoTuple(A first, B second){
-		this.first = first;
-		this.second = second;
-	}
-	@Override
-	public String toString(){
-		
-		return this.first + " " + this.second;
-	}
-}
-class  ThreeTuple<A,  B, C extends Comparable<? super C>> extends TwoTuple<A,  B>{
-	
-	final C third;
-	public ThreeTuple(A first, B second, C third){
-		super(first, second);
-		this.third = third;
+	final A fir;
+	final B sec;
+	public TwoTuple(A fir, B sec){
+		this.fir = fir;
+		this.sec = sec;
 	}
 	
 	@Override
 	public String toString(){
-		return first + " " +second + " " + third;
+		return fir + " " +sec ;
 	}
 }
+

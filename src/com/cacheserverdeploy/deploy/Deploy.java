@@ -1,10 +1,7 @@
 package com.cacheserverdeploy.deploy;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
-import java.util.Set;
 
 import com.cacheserverdeploy.deploy.Graph;
 import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
@@ -21,29 +18,33 @@ public class Deploy{
 	 * @return
 	 */
 	public static String[] deployServer(String[] graphContent){
-    	long startTime = System.currentTimeMillis();
-    	int totalCost = Integer.MAX_VALUE;
         Graph graph = null;
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
     	graph.sortClients();
+    	int pathNum = 0;
+    	Map<Integer, List<PCF>> clientPaths = null;
+		StringBuffer sb = new StringBuffer();
     	while(true){
-    		Map<Integer, List<ThreeTuple<String, Integer, Integer>>> clientPaths = graph.getBestServers();
+    		clientPaths = graph.getBestServers();
 	    	graph.update();
+	    	System.out.println(graph.printServers());
 	    	if(graph.changed){
 	    		graph.changed = false;
 	    		for(int client: clientPaths.keySet()){
-		    		for(ThreeTuple<String, Integer, Integer> optiPath: clientPaths.get(client)){
-			    		graph.updateBandWidth(optiPath.first, optiPath.third, UpdateOperator.PLUS);
+		    		for(PCF optiPath: clientPaths.get(client)){
+			    		graph.updateBandWidth(optiPath.path, optiPath.flow, UpdateOperator.PLUS);
 			    	}
 	    		}
 	    	}else{
 		    	int cost = graph.getServers().size() * graph.serverCost;
 		    	for(int client: clientPaths.keySet()){
-			    	for(ThreeTuple<String, Integer, Integer> optiPath: clientPaths.get(client)){
-			    		System.out.println("path:"+optiPath.first+" "+client+" cost:"+optiPath.second+" flow:"+optiPath.third);
-			    		cost += optiPath.second * optiPath.third;
+			    	for(PCF optiPath: clientPaths.get(client)){
+			    		sb.append("\n"+optiPath.path+" "+client+" "+optiPath.flow);
+			    		pathNum++;
+			    		System.out.println(optiPath.path+" "+client+" cost:"+optiPath.cost+" flow:"+optiPath.flow);
+			    		cost += optiPath.cost * optiPath.flow;
 			    	}
 		    	}
 		    	System.out.println("cost:"+cost);
@@ -51,7 +52,7 @@ public class Deploy{
 	    	}
     	}
 
-    	return new String[]{0+""};
+    	return new String[]{pathNum+"", sb.toString()};
     }
 	
     /**
