@@ -1,13 +1,11 @@
 package com.cacheserverdeploy.deploy;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
 import com.cacheserverdeploy.deploy.Graph;
-import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
+
 
 public class Deploy{
 	private static int lineNum = 0;//网络图读取过程中标记行数
@@ -27,19 +25,8 @@ public class Deploy{
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
     	graph.sortClients();
-    	System.out.println(graph.printServers());
-    	List<ThreeTuple<ThreeTuple<String, Integer, Integer>, Integer, Integer>> pcfClientAllocates = new ArrayList<>();
-    	TwoTuple<Boolean, Float> result = graph.costOfServerNodes(graph.getServers(), pcfClientAllocates);
-    	//默认所有节点都设置为服务器节点，如果不能满足则无解
-    	if(! result.first){
-    		return new String[]{"NA"};
-    	}
-    	graph.createLeagues();
-    	graph.initLeagues();
-    	for(League league:graph.leagues){
-    		TwoTuple<Boolean, Integer> res = league.getBestServer(graph);
-    		System.out.println(res.first+" " + res.second);
-    	}
+    	graph.getBestServers();
+    	
     	
     	
     	
