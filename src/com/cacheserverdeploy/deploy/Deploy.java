@@ -28,10 +28,9 @@ public class Deploy{
 		StringBuffer sb = new StringBuffer();
     	while(true){
     		clientPaths = graph.getBestServers();
-	    	graph.update();
+	    	boolean changed = graph.update();
 	    	System.out.println(graph.printServers());
-	    	if(graph.changed){
-	    		graph.changed = false;
+	    	if(changed){
 	    		for(int client: clientPaths.keySet()){
 		    		for(PCF optiPath: clientPaths.get(client)){
 			    		graph.updateBandWidth(optiPath.path, optiPath.flow, UpdateOperator.PLUS);

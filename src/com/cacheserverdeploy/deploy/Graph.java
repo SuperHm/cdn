@@ -44,7 +44,7 @@ public class Graph {
 	int[] out;
 	int[] nodeFlow;
 	int[] nodeCost;
-	boolean changed;
+	boolean[] forbid;
     Set<Integer> satNodes;
 
 
@@ -64,7 +64,7 @@ public class Graph {
 		this.maxOffer = new int[nodesNum];
 		this.nodeFlow = new int[nodesNum];
 		this.nodeCost = new int[nodesNum];
-		
+		this.forbid = new boolean[nodesNum];
 		this.isServer = new boolean[nodesNum];
 		this.satNodes = new HashSet<>();
 		for(int i=0; i<nodesNum; i++){
@@ -183,13 +183,17 @@ public class Graph {
     				break;
     		}
     		//租用流量
-    		if(need <= 0 && cost + nodeCost[linkedNode]< serverCost){
+    		if(need <= 0 && cost + nodeCost[linkedNode]< serverCost && !forbid[linkedNode]){
+    			if(linkedNode==29)
+    			System.out.println("nodecost:"+nodeCost[linkedNode]);
     			//告知其租用流量的用户，不再提供流量
     			List<TwoTuple<PCF, Integer>> pcfClients = rends.get(linkedNode);
     			if(pcfClients != null){
+    				System.out.println(linkedNode+" ");
 	    			for(TwoTuple<PCF, Integer> pcfClient: pcfClients){
 	    				String[] nodeStrs = pcfClient.fir.path.split(" ");
 	    				int link = Integer.parseInt(nodeStrs[nodeStrs.length-1]);
+	    				clientPaths.get(pcfClient.sec).remove(pcfClient.fir);
 	    				unsatClds.add(new CLD(pcfClient.sec, link, pcfClient.fir.flow));
 	    				updateBandWidth(pcfClient.fir.path, pcfClient.fir.flow, UpdateOperator.PLUS);
 	    			}
@@ -219,23 +223,35 @@ public class Graph {
     			optiPaths.add(new PCF(linkedNode+"", 0, cld.demand));
     			isServer[linkedNode] = true;
     		}
-    		clientPaths.put(client, optiPaths);
+    		List<PCF> list = clientPaths.get(client);
+    		if(linkedNode==5){
+    			System.out.println("5");
+    		}
+    		if(list == null){
+    			clientPaths.put(client, optiPaths);
+    		}else {
+				optiPaths.addAll(list);
+				clientPaths.put(client, optiPaths);
+			}
     		unsatClds.remove(cld);
     	}
     	return clientPaths;
 	}
     
-    public void update(){
+    public boolean update(){
+    	boolean changed = false;
     	for(int node: nodes){
     		if(nodeCost[node] > serverCost){
     			if(!isServer[node]){
     				System.out.println(node);
     				changed = true;
+    				forbid[node] = true;
     			}
 	    		isServer[node] = true;
 	    		System.out.println(node + " set server!");
     		}
     	}
+    	return changed;
     }
     
     
