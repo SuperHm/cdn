@@ -3,7 +3,9 @@ package com.cacheserverdeploy.deploy;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 
@@ -35,12 +37,12 @@ public class Graph {
 	List<ThreeTuple<Integer, Integer, Integer>> clds;	//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
 	
 	boolean[] isServer; 
-	List<Integer> servers;
 	
 	int[] maxOffer;
 	int[] out;
 	int[] nodeFlow;
 	int[] nodeCost;
+	boolean changed;
 
 
 
@@ -118,6 +120,8 @@ public class Graph {
 			nodeFlow[nextNode] += pcf.third;
 			cost += unitCosts[node][nextNode] * pcf.third;
 			nodeCost[nextNode] += cost;	
+//			if(nodeCost[nextNode] > serverCost)
+//				isServer[nextNode] = true;
 			node = nextNode;
 		}
 		int lastNode = Integer.parseInt(nodeStrs[i]);
@@ -161,9 +165,10 @@ public class Graph {
 		}
 	}
 
-    public void getBestServers(){
-    	List<ThreeTuple<String, Integer, Integer>> optiPaths = new ArrayList<>();
+    public 	Map<Integer, List<ThreeTuple<String, Integer, Integer>>>  getBestServers(){
+       Map<Integer, List<ThreeTuple<String, Integer, Integer>>> clientPaths = new HashMap<>();
     	for(ThreeTuple<Integer, Integer, Integer> cld: clds){
+    		List<ThreeTuple<String, Integer, Integer>> optiPaths = new ArrayList<>();
     		ThreeTuple<String, Integer, Integer> optPcf = null;
     		int need = cld.third;
     		int linkedNode = cld.second;
@@ -175,6 +180,7 @@ public class Graph {
     				break;
     			int real = Math.min(optPcf.third, need);
     			optiPaths.add(new ThreeTuple<>(optPcf.first, optPcf.second, real));
+    			
     			updateBandWidth(optPcf.first, real, UpdateOperator.MINUS);
     			need-=real;
     			cost += real * optPcf.second;
@@ -183,22 +189,55 @@ public class Graph {
     		}
     		//租用流量
     		if(need <= 0 && cost < serverCost){
+    			if(nodeFlow[linkedNode]>0)
+    				changed = true;
     			isServer[linkedNode] = false;
     			for(ThreeTuple<String, Integer, Integer> optiPath: optiPaths){
     				plusNodeFlow(optiPath);
-    				System.out.println("path:"+optiPath.first+"->client:"+client+" cost:"+optiPath.second+" flow:"+optiPath.third);
     			}
     		}else{
     		//设立服务器
-    			System.out.println(linkedNode+"->client:"+client+" cost: 0"+" flow："+cld.third);
+    			for(ThreeTuple<String, Integer, Integer> optiPath: optiPaths){
+    				updateBandWidth(optiPath.first, optiPath.third, UpdateOperator.PLUS);
+    			}
+    			optiPaths.clear();
+    			optiPaths.add(new ThreeTuple<>(linkedNode+"", 0, cld.third));
+    		}
+    		clientPaths.put(client, optiPaths);
+    	}
+    	return clientPaths;
+	}
+    
+    public boolean update(){
+    	int maxNodeCost = serverCost;
+    	int maxNode = -1;
+    	for(int node: nodes){
+    		if(nodeCost[node] > maxNodeCost){
+    			maxNode = node;
+    			maxNodeCost = nodeCost[node];
     		}
     	}
-	}
+    	if(maxNode == -1){
+    		return false;
+    	}else{
+    		isServer[maxNode] = true;
+    		System.out.println(maxNode + " set server!");
+    		return true;
+    	}
+    }
     
     
     
     public ThreeTuple<String, Integer, Integer> getOptPath(int src){
-		List<ThreeTuple<String, Integer, Integer>> paths =  getPath(src, getServers());
+    	List<Integer> servers = getServers();
+    	if(servers.contains(src))
+    		servers.remove(new Integer(src));
+    	List<ThreeTuple<String, Integer, Integer>> paths = new ArrayList<>();
+    	for(int node: servers){
+    		ThreeTuple<String, Integer, Integer> path =  getPath(node, src);
+    		if(path != null)
+    			paths.add(path);
+    	}
 		if(paths.size()==0)
 			return null;
 		Collections.sort(paths, new Comparator<ThreeTuple<String, Integer, Integer>>() {
@@ -210,18 +249,15 @@ public class Graph {
 		return paths.get(0);
 	}
 	
-	private List<ThreeTuple<String, Integer, Integer>> getPath(int src, List<Integer> des){
+	private ThreeTuple<String, Integer, Integer> getPath(int src, int des){
     	int[] costs = new int[nodes.size()];
     	int[] flows = new int[nodes.size()];
     	String[] shortPaths = new String[nodes.size()];
     	//dijkstra方法计算结果是 src 到所有顶点的最短距离
     	dijkstra(src, shortPaths, costs, flows);
-    	List<ThreeTuple<String, Integer, Integer>> list = new ArrayList<>();
-    	for(int node:des){
-    		if(costs[node] != Graph.MAX_VALUE)
-    			list.add(new ThreeTuple<String, Integer, Integer>(shortPaths[node], costs[node], flows[node]));
-    	}
-    	return list;
+    	if(costs[des] != Graph.MAX_VALUE)
+    		return new ThreeTuple<String, Integer, Integer>(shortPaths[des], costs[des], flows[des]);
+    	return null;
 	}
     
     

@@ -1,10 +1,13 @@
 package com.cacheserverdeploy.deploy;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
 import com.cacheserverdeploy.deploy.Graph;
+import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
 
 
 public class Deploy{
@@ -25,23 +28,30 @@ public class Deploy{
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
     	graph.sortClients();
-    	graph.getBestServers();
-    	
-    	
-    	
-    	
-    	
+    	while(true){
+    		Map<Integer, List<ThreeTuple<String, Integer, Integer>>> clientPaths = graph.getBestServers();
+	    	graph.update();
+	    	if(graph.changed){
+	    		graph.changed = false;
+	    		for(int client: clientPaths.keySet()){
+		    		for(ThreeTuple<String, Integer, Integer> optiPath: clientPaths.get(client)){
+			    		graph.updateBandWidth(optiPath.first, optiPath.third, UpdateOperator.PLUS);
+			    	}
+	    		}
+	    	}else{
+		    	int cost = graph.getServers().size() * graph.serverCost;
+		    	for(int client: clientPaths.keySet()){
+			    	for(ThreeTuple<String, Integer, Integer> optiPath: clientPaths.get(client)){
+			    		System.out.println("path:"+optiPath.first+" "+client+" cost:"+optiPath.second+" flow:"+optiPath.third);
+			    		cost += optiPath.second * optiPath.third;
+			    	}
+		    	}
+		    	System.out.println("cost:"+cost);
+	    		break;
+	    	}
+    	}
 
     	return new String[]{0+""};
-    }
-	
-	
-    public static Set<Integer> genRandomNodes(int num, int range){
-    	Set<Integer> list = new HashSet<>();
-    	Random random = new Random();
-    	while(list.size() != num)
-    		list.add(random.nextInt(range));
-    	return list;
     }
 	
     /**
