@@ -184,12 +184,11 @@ public class Graph {
     		}
     		//租用流量
     		if(need <= 0 && cost + nodeCost[linkedNode]< serverCost && !forbid[linkedNode]){
-    			if(linkedNode==29)
     			System.out.println("nodecost:"+nodeCost[linkedNode]);
     			//告知其租用流量的用户，不再提供流量
     			List<TwoTuple<PCF, Integer>> pcfClients = rends.get(linkedNode);
     			if(pcfClients != null){
-    				System.out.println(linkedNode+" ");
+//    				System.out.println(linkedNode+" ");
 	    			for(TwoTuple<PCF, Integer> pcfClient: pcfClients){
 	    				String[] nodeStrs = pcfClient.fir.path.split(" ");
 	    				int link = Integer.parseInt(nodeStrs[nodeStrs.length-1]);
@@ -288,6 +287,10 @@ public class Graph {
 	}
 	
 	private PCF getPath(int src, int des){
+		if(src==35 && des==29){
+			System.out.println("");
+			
+		}
     	int[] costs = new int[nodes.size()];
     	int[] flows = new int[nodes.size()];
     	String[] shortPaths = new String[nodes.size()];
