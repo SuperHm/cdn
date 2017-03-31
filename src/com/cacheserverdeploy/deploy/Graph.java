@@ -120,6 +120,26 @@ public class Graph {
 	}
 	
 	
+	public void minusNodeFlow(PCF pcf){
+		String[] nodeStrs = pcf.path.split(" ");
+		int cost = 0;
+		int node = Integer.parseInt(nodeStrs[0]);
+		nodeFlow[node] -= pcf.flow;
+		int i=0;
+		int nextNode=0;
+		for(i=1; i<nodeStrs.length-1; i++){
+			nextNode = Integer.parseInt(nodeStrs[i]);
+			nodeFlow[nextNode] -= pcf.flow;
+			cost += unitCosts[node][nextNode] * pcf.flow;
+			nodeCost[nextNode] -= cost;	
+			node = nextNode;
+		}
+		int lastNode = Integer.parseInt(nodeStrs[i]);
+		cost += unitCosts[nextNode][lastNode] * pcf.flow;
+		nodeCost[lastNode] -= cost;
+	}
+	
+	
 	
 
 	/**
@@ -161,12 +181,16 @@ public class Graph {
        nodeCost = new int[nodesNum];
        nodeFlow = new int[nodesNum];
        List<CLD> unsatClds = new ArrayList<>(clds);
+     
        while(unsatClds.size()!=0){
     		CLD cld = unsatClds.get(0);
     		List<PCF> optiPaths = new ArrayList<>();
     		PCF optPcf = null;
     		int need = cld.demand;
     		int linkedNode = cld.linked;
+		    if(linkedNode == 29){
+				System.out.println(" ");
+			}
     		int client = cld.client;
     		int cost = 0;
     		while(true){
@@ -215,17 +239,20 @@ public class Graph {
     			
     		}else{
     		//设立服务器
+    			int flow = 0;
+    			List<PCF> list = clientPaths.get(client);
+    			if(list != null)
+    				for(PCF pcf: list)
+        				flow+=pcf.flow;
+    				optiPaths.addAll(list);
     			for(PCF optiPath: optiPaths){
     				updateBandWidth(optiPath.path, optiPath.flow, UpdateOperator.PLUS);
     			}
     			optiPaths.clear();
-    			optiPaths.add(new PCF(linkedNode+"", 0, cld.demand));
+    			optiPaths.add(new PCF(linkedNode+"", 0, cld.demand+flow));
     			isServer[linkedNode] = true;
     		}
     		List<PCF> list = clientPaths.get(client);
-    		if(linkedNode==5){
-    			System.out.println("5");
-    		}
     		if(list == null){
     			clientPaths.put(client, optiPaths);
     		}else {
