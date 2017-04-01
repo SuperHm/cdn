@@ -176,6 +176,8 @@ public class Graph {
 		}
 	}
 
+
+	
     public 	Map<Integer, List<PCF>>  getBestServers(){
       Map<Integer, List<TwoTuple<PCF, Integer>>> rends = new HashMap<>();
        Map<Integer, List<PCF>> clientPaths = new HashMap<>();

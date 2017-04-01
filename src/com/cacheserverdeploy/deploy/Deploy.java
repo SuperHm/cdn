@@ -25,16 +25,27 @@ public class Deploy{
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
-    	graph.sortClients();
-    	for(int randomServer: getRandomServers(graph.nodesNum,2)){
-    		graph.isServer[randomServer] = true;
+    	if(graph.nodesNum>400){
+    		StringBuffer sb = new StringBuffer();
+    		int cost = graph.getServers().size() * graph.serverCost;
+	    	for(CLD cld: graph.clds){
+	    		sb.append("\n"+cld.linked+" "+cld.client+" "+cld.demand);
+	    		System.out.println(cld.linked+" "+cld.client+" cost: 0"+" flow:"+cld.demand);
+	    	}
+	    	System.out.println("cost:"+cost);
+	    	return new String[]{graph.clds.size()+"", sb.toString()};
     	}
+    	graph.sortClients();
+//    	for(int randomServer: getRandomServers(graph.nodesNum,(int)(graph.nodesNum*0.02))){
+//    		graph.isServer[randomServer] = true;
+//    	}
     	int pathNum = 0;
     	Map<Integer, List<PCF>> clientPaths = null;
 		StringBuffer sb = new StringBuffer();
+		boolean changed=false;
     	while(true){
     		clientPaths = graph.getBestServers();
-	    	boolean changed = graph.update();
+	    	changed = graph.update();
 	    	System.out.println(graph.printServers());
 	    	if(changed){
 	    		for(int client: clientPaths.keySet()){
@@ -53,11 +64,12 @@ public class Deploy{
 			    	}
 		    	}
 		    	System.out.println("cost:"+cost);
-	    		break;
+		    	break;
 	    	}
     	}
-
-    	return new String[]{pathNum+"", sb.toString()};
+    	if(!changed)
+    		return new String[]{pathNum+"", sb.toString()};
+    	return new String[]{"NA"};
     }
 	
 	
