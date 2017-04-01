@@ -162,7 +162,8 @@ public class Graph {
 	 * @param operator 增加或者减少
 	 */
 	public void updateBandWidth(String path, int increment, UpdateOperator operator){
-		int src, des;
+		int src=0, des=0;
+		
 		String[] pathNodesStr = path.split(" ");
 		for(int ii=0; ii<pathNodesStr.length-1; ii++){
 			src = Integer.parseInt(pathNodesStr[ii]);//起始节点
@@ -176,7 +177,7 @@ public class Graph {
 	}
 
     public 	Map<Integer, List<PCF>>  getBestServers(){
-      Map<Integer, ArrayList<TwoTuple<PCF, Integer>>> rends = new HashMap<>();
+      Map<Integer, List<TwoTuple<PCF, Integer>>> rends = new HashMap<>();
        Map<Integer, List<PCF>> clientPaths = new HashMap<>();
        nodeCost = new int[nodesNum];
        nodeFlow = new int[nodesNum];
@@ -188,9 +189,6 @@ public class Graph {
     		PCF optPcf = null;
     		int need = cld.demand;
     		int linkedNode = cld.linked;
-		    if(linkedNode == 29){
-				System.out.println(" ");
-			}
     		int client = cld.client;
     		int cost = 0;
     		while(true){
@@ -199,7 +197,6 @@ public class Graph {
     				break;
     			int real = Math.min(optPcf.flow, need);
     			optiPaths.add(new PCF(optPcf.path, optPcf.cost, real));
-    			
     			updateBandWidth(optPcf.path, real, UpdateOperator.MINUS);
     			need-=real;
     			cost += real * optPcf.cost;
@@ -208,29 +205,31 @@ public class Graph {
     		}
     		//租用流量
     		if(need <= 0 && cost + nodeCost[linkedNode]< serverCost && !forbid[linkedNode]){
-    			System.out.println("nodecost:"+nodeCost[linkedNode]);
     			//告知其租用流量的用户，不再提供流量
     			List<TwoTuple<PCF, Integer>> pcfClients = rends.get(linkedNode);
     			if(pcfClients != null){
-//    				System.out.println(linkedNode+" ");
+    				forbid[linkedNode] = true;
+    				System.out.println(linkedNode);
 	    			for(TwoTuple<PCF, Integer> pcfClient: pcfClients){
 	    				String[] nodeStrs = pcfClient.fir.path.split(" ");
 	    				int link = Integer.parseInt(nodeStrs[nodeStrs.length-1]);
 	    				clientPaths.get(pcfClient.sec).remove(pcfClient.fir);
 	    				unsatClds.add(new CLD(pcfClient.sec, link, pcfClient.fir.flow));
 	    				updateBandWidth(pcfClient.fir.path, pcfClient.fir.flow, UpdateOperator.PLUS);
+	    				minusNodeFlow(pcfClient.fir);
 	    			}
     			}
     			isServer[linkedNode] = false;
     			
     			//注册租用信息
-    			ArrayList<TwoTuple<PCF, Integer>> list = null;
+    			List<TwoTuple<PCF, Integer>> list = null;
     			for(PCF optiPath: optiPaths){
     				plusNodeFlow(optiPath);
     				String[] nodeStrs = optiPath.path.split(" ");
     				int src = Integer.parseInt(nodeStrs[0]);
     				if(!rends.keySet().contains(src)){
-    					rends.put(src, new ArrayList<>());
+    					List<TwoTuple<PCF, Integer>> newList = new ArrayList<>();
+    					rends.put(src, newList);
     				}
     				list = rends.get(src);
     				list.add(new TwoTuple<>(optiPath, client));
@@ -239,15 +238,16 @@ public class Graph {
     			
     		}else{
     		//设立服务器
-    			int flow = 0;
-    			List<PCF> list = clientPaths.get(client);
-    			if(list != null)
-    				for(PCF pcf: list)
-        				flow+=pcf.flow;
-    				optiPaths.addAll(list);
     			for(PCF optiPath: optiPaths){
     				updateBandWidth(optiPath.path, optiPath.flow, UpdateOperator.PLUS);
     			}
+    			int flow = 0;
+    			List<PCF> list = clientPaths.get(client);
+    			if(list != null){
+    				for(PCF pcf: list)
+        				flow+=pcf.flow;
+    				optiPaths.addAll(list);
+    			}  		
     			optiPaths.clear();
     			optiPaths.add(new PCF(linkedNode+"", 0, cld.demand+flow));
     			isServer[linkedNode] = true;
@@ -314,10 +314,6 @@ public class Graph {
 	}
 	
 	private PCF getPath(int src, int des){
-		if(src==35 && des==29){
-			System.out.println("");
-			
-		}
     	int[] costs = new int[nodes.size()];
     	int[] flows = new int[nodes.size()];
     	String[] shortPaths = new String[nodes.size()];

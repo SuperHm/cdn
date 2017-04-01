@@ -1,7 +1,10 @@
 package com.cacheserverdeploy.deploy;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
 import com.cacheserverdeploy.deploy.Graph;
 import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
@@ -23,6 +26,9 @@ public class Deploy{
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
     	graph.sortClients();
+    	for(int randomServer: getRandomServers(graph.nodesNum,2)){
+    		graph.isServer[randomServer] = true;
+    	}
     	int pathNum = 0;
     	Map<Integer, List<PCF>> clientPaths = null;
 		StringBuffer sb = new StringBuffer();
@@ -54,6 +60,19 @@ public class Deploy{
     	return new String[]{pathNum+"", sb.toString()};
     }
 	
+	
+	public static Set<Integer> getRandomServers(int range, int num){
+		Set<Integer> servers = new HashSet<>();
+		Random random = new Random();
+		while(num != 0){
+			int server = random.nextInt(range);
+			if(!servers.contains(server)){
+				servers.add(server);
+				num--;
+			}
+		}
+		return servers;
+	}
     /**
      * 读取网络节点数量、消费节点数量、服务器部署成本、网络链路数量。基于此信息初始化 Graph
      * 
