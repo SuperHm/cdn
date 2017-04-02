@@ -2,7 +2,6 @@ package com.cacheserverdeploy.deploy;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -25,45 +24,46 @@ public class Deploy{
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
-    	if(graph.nodesNum>400){
-    		StringBuffer sb = new StringBuffer();
-    		int cost = graph.getServers().size() * graph.serverCost;
-	    	for(CLD cld: graph.clds){
-	    		sb.append("\n"+cld.linked+" "+cld.client+" "+cld.demand);
-	    		System.out.println(cld.linked+" "+cld.client+" cost: 0"+" flow:"+cld.demand);
-	    	}
-	    	System.out.println("cost:"+cost);
-	    	return new String[]{graph.clds.size()+"", sb.toString()};
-    	}
+//    	if(graph.nodesNum>400){
+//    		StringBuffer sb = new StringBuffer();
+//    		int cost = graph.getServers().size() * graph.serverCost;
+//	    	for(CLD cld: graph.clds){
+//	    		sb.append("\n"+cld.linked+" "+cld.client+" "+cld.demand);
+//	    		System.out.println(cld.linked+" "+cld.client+" cost: 0"+" flow:"+cld.demand);
+//	    	}
+//	    	System.out.println("cost:"+cost);
+//	    	return new String[]{graph.clds.size()+"", sb.toString()};
+//    	}
     	graph.sortClients();
 //    	for(int randomServer: getRandomServers(graph.nodesNum,(int)(graph.nodesNum*0.02))){
 //    		graph.isServer[randomServer] = true;
 //    	}
     	int pathNum = 0;
-    	Map<Integer, List<PCF>> clientPaths = null;
+    	 List<PCF> paths = null;
 		StringBuffer sb = new StringBuffer();
 		boolean changed=false;
     	while(true){
-    		clientPaths = graph.getBestServers();
+    		paths = graph.getBestServers();
 	    	changed = graph.update();
 	    	System.out.println(graph.printServers());
 	    	if(changed){
-	    		for(int client: clientPaths.keySet()){
-		    		for(PCF optiPath: clientPaths.get(client)){
-			    		graph.updateBandWidth(optiPath.path, optiPath.flow, UpdateOperator.PLUS);
-			    	}
-	    		}
+	    		graph.recoverBandwidths();
 	    	}else{
 		    	int cost = graph.getServers().size() * graph.serverCost;
-		    	for(int client: clientPaths.keySet()){
-			    	for(PCF optiPath: clientPaths.get(client)){
-			    		sb.append("\n"+optiPath.path+" "+client+" "+optiPath.flow);
-			    		pathNum++;
-			    		System.out.println(optiPath.path+" "+client+" cost:"+optiPath.cost+" flow:"+optiPath.flow);
-			    		cost += optiPath.cost * optiPath.flow;
-			    	}
+		    	for(PCF pcf: paths){
+		    		int client = graph.linkClient.get(pcf.path.getFirst());
+		    		sb.append("\n");
+		    		System.out.print("\n");
+		    		for(int i=pcf.path.size()-1; i>=0; i--){
+		    			sb.append(pcf.path.get(i)+" ");
+		    			System.out.print(pcf.path.get(i)+" ");
+		    		}
+		    		sb.append(client+" "+pcf.flow);
+		    		System.out.print(client+" "+pcf.flow);
+		    		pathNum++;
+		    		cost += pcf.cost * pcf.flow;
 		    	}
-		    	System.out.println("cost:"+cost);
+		    	System.out.println("\ncost:"+cost);
 		    	break;
 	    	}
     	}
