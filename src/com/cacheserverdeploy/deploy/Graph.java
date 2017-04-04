@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import sun.print.resources.serviceui_sv;
+
+import java.util.Map.Entry;
+import java.util.Queue;
+
 
 
 
@@ -41,6 +46,8 @@ public class Graph {
 	int[][] unitCosts;
 	List<CLD> clds;	//cld 表示 client linkedNode demand，及消费节点client 相连的服务器节点 带宽需求
 	Map<Integer, Integer> linkClient;
+	Map<Integer, Integer> linkDemand;
+	int totalDemand;
 	
 	boolean[] isServer; 
 	
@@ -64,7 +71,8 @@ public class Graph {
 		this.linkNum = linkNum;
 		this.clientsNum = clientsNum;
 		this.nodesNum = nodesNum;
-		this.linkClient = new HashMap<>();		
+		this.linkClient = new HashMap<>();	
+		this.linkDemand = new HashMap<>();
 		this.out = new int[nodesNum];
 		this.maxOffer = new int[nodesNum];
 		this.nodeFlow = new int[nodesNum];
@@ -75,6 +83,7 @@ public class Graph {
 		for(int i=0; i<nodesNum; i++){
 			nodes.add(i);
 			bandWidths[i][i] = MAX_VALUE;
+			bandWidthsBak[i][i] = MAX_VALUE;
 		}
 		
 	}
@@ -95,10 +104,14 @@ public class Graph {
 		this.isServer[linkedNode] = true;
 		this.clds.add(new CLD(node, linkedNode, demand));
 		linkClient.put(linkedNode, node);
-		
+		linkDemand.put(linkedNode, demand);		
+		totalDemand += demand;
 	}
 	
-	public void recoverBandwidths(){
+	public void recover(){
+		nodeCost = new int[nodesNum];
+		nodeFlow = new int[nodesNum];
+		forbid = new boolean[nodesNum];
 		for(int i=0; i<nodesNum; i++)
 			for(int j=0; j<nodesNum; j++)
 				bandWidths[i][j] = bandWidthsBak[i][j];
@@ -108,7 +121,7 @@ public class Graph {
 	public List<Integer> getServers(){
 		List<Integer> serverList = new ArrayList<>();
 		for(int i=0; i<nodesNum; i++){
-		if(this.isServer[i])
+		if(isServer[i])
 			serverList.add(i);
 		}
 		return serverList;
@@ -170,6 +183,44 @@ public class Graph {
 		});
 	}
 	
+	public void randomClients(){
+		Collections.shuffle(clds);
+	}
+	
+	public int getCost(List<PCF> paths){
+		int cost = getServers().size() * serverCost;
+		for(PCF pcf: paths){		
+    		cost += pcf.cost * pcf.flow;
+    	}
+		return cost;
+	}
+	
+	public void recoverServers(List<Integer> servers){
+		isServer = new boolean[nodesNum];
+		for(int server:servers)
+			isServer[server] = true;
+	}
+	
+	public String print(List<PCF> paths, List<Integer> servers){
+		printServers();
+		StringBuffer sb = new StringBuffer();
+		int cost = servers.size() * serverCost;
+		for(PCF pcf: paths){
+    		int client = linkClient.get(pcf.path.getFirst());
+    		sb.append("\n");
+    		System.out.print("\n");
+    		for(int i=pcf.path.size()-1; i>=0; i--){
+    			sb.append(pcf.path.get(i)+" ");
+    			System.out.print(pcf.path.get(i)+" ");
+    		}
+    		sb.append(client+" "+pcf.flow);
+    		System.out.print(client+" "+pcf.flow);
+    		cost += pcf.cost * pcf.flow;
+    	}
+    	System.out.println("\ncost:"+cost);
+    	return sb.toString();
+	}
+	
 	/**
 	 * 根据 path 和 对应的 increment 更新边上剩余带宽
 	 * 
@@ -194,7 +245,7 @@ public class Graph {
 
 
 	
-    public 	List<PCF>  getBestServers(){
+    public 	List<PCF> getBestServers(){
     	List<PCF> paths = new LinkedList<>();
     	nodeCost = new int[nodesNum];
     	nodeFlow = new int[nodesNum];
@@ -218,15 +269,16 @@ public class Graph {
     			if(need <= 0)
     				break;
     		}
+//    		System.out.println("cld :"+cld.client +" "+ cld.demand +" "+ cld.linked);
     		//租用流量
     		if(need <= 0 && cost + nodeCost[linkedNode]< serverCost && !forbid[linkedNode]){
     			//告知其租用流量的用户，不再提供流量
-        		System.out.println(linkedNode);
+//    			System.out.println("租用流量");
     			List<PCF> unsatPcfs = new LinkedList<>();
     			for(PCF pcf: paths){
     				if(pcf.path.getLast() == linkedNode){
     					updateBandWidth(pcf.path, pcf.flow, UpdateOperator.PLUS);
-	    				minusNodeFlow(pcf);
+    					minusNodeFlow(pcf);
     					int link = pcf.path.getFirst();
     					unsatClds.add(new CLD(linkClient.get(link), link, pcf.flow));
     					unsatPcfs.add(pcf);
@@ -238,6 +290,7 @@ public class Graph {
     			
     		}else{
     		//设立服务器
+//    			System.out.println("设立服务器");
     			for(PCF optiPath: optiPaths){
     				updateBandWidth(optiPath.path, optiPath.flow, UpdateOperator.PLUS);
     			}
@@ -245,7 +298,11 @@ public class Graph {
     			
     			int flow = 0;
     			List<PCF> uselessPcfs = new LinkedList<>();
+    			List<PCF> modifiedPcfs = new LinkedList<>();
     			for(PCF pcf: paths){
+    				if(pcf.path.contains(linkedNode)&&pcf.path.getFirst()!=linkedNode&&pcf.path.getLast()!=linkedNode){
+    					modifiedPcfs.add(pcf);
+    				}
     				if(pcf.path.getFirst()==linkedNode){
     					updateBandWidth(pcf.path, pcf.flow, UpdateOperator.PLUS);
     					minusNodeFlow(pcf);
@@ -254,6 +311,15 @@ public class Graph {
     				}
     			}
     			paths.removeAll(uselessPcfs);
+    			for(PCF pcf:modifiedPcfs){
+    				paths.remove(pcf);
+    				int idx = pcf.path.indexOf(linkedNode);
+    				LinkedList<Integer> cutPath = new LinkedList<>(pcf.path.subList(idx, pcf.path.size()));
+    				updateBandWidth(cutPath, pcf.flow, UpdateOperator.PLUS);
+    				minusNodeFlow(new PCF(cutPath, pcf.cost, pcf.flow));
+    				LinkedList<Integer> newPath = new LinkedList<>(pcf.path.subList(0, idx+1));
+    				paths.add(new PCF(newPath, getMiniCost(newPath), pcf.flow));
+    			}
     	
     			List<CLD> uselessClds = new LinkedList<>();
     			for(int i=1; i<unsatClds.size()-1; i++){
@@ -269,51 +335,47 @@ public class Graph {
     			tmp.add(linkedNode);
     			optiPaths.add(new PCF(tmp, 0, cld.demand+flow));
     			isServer[linkedNode] = true;
+    			forbid[linkedNode] = true;
     		}
     		for(PCF pcf: optiPaths)
     			plusNodeFlow(pcf);
     		paths.addAll(optiPaths);
     		unsatClds.remove(cld);
     	}
-    	return paths;
+       	return paths;
 	}
     
-    public boolean update(){
-    	boolean changed = false;
+    public void update(){
     	for(int node: nodes){
-//    		if(Math.random() < (float)nodeCost[node]/(float)serverCost){
-    		if(nodeCost[node] > serverCost){
-    			if(!isServer[node]){
-    				System.out.println(node);
-    				changed = true;
-    				forbid[node] = true;
-    	    		isServer[node] = true;
-    			}
-	    		System.out.println(node + " set server!");
+    		if(nodeFlow[node] == 0 && isServer[node])
+    			isServer[node] = false;
+    		if(nodeCost[node] > serverCost && !isServer[node]){
+				forbid[node] = true;
+	    		isServer[node] = true;
     		}
     	}
-     	return changed;
     }
     
     
-    public String printServers(){
+    public void printServers(){
     	StringBuilder sb = new StringBuilder();
     	for(int node:nodes){
     		if(isServer[node])
     			sb.append(node+" ");
     	}
-    	return sb.toString();
+    	System.out.println(sb.toString());;
     }
-    
     
     
     public PCF getOptPath(int src){
     	List<Integer> servers = getServers();
+//    	System.out.println(servers);
     	if(servers.contains(src))
     		servers.remove(new Integer(src));
     	 Map<Integer, LinkedList<Integer>> shortPaths = new HashMap<>();
 		 int[] costs = new int[nodesNum];
-		 dijkstra(src, shortPaths, costs);
+		 int[][] weights = initWeights();
+		 dijkstra(src, weights, shortPaths, costs);
 		 int minCost = MAX_VALUE;
 		 int candidate = -1;
     	for(int server: servers){
@@ -324,11 +386,54 @@ public class Graph {
     	}
 		if(minCost==MAX_VALUE)
 			return null;
+		double r = 0.2;
+		if(nodesNum > 400)
+			r = 0.05;
+		if(Math.random() < r){
+			candidate = servers.get((int)(Math.random() * servers.size()));
+			
+			minCost = costs[candidate];
+		}
 		LinkedList<Integer> optPath = shortPaths.get(candidate);
 		return new PCF(optPath, minCost, getMiniFlow(optPath));
 	}
     
-    private int getMiniFlow(List<Integer> path){
+    
+	public List<PCF> getOptPaths(List<Integer> servers){
+		 List<PCF> optPaths = new LinkedList<>();
+		 Map<Integer, LinkedList<Integer>> shortPaths = new HashMap<>();
+		 int[] costs = new int[nodesNum+2];
+		 Map<Integer, Integer> linkDemandCopy = new HashMap<>(linkDemand);
+		 while(true){
+			 int[][] weights = initWeights(servers);
+			 for(Entry<Integer, Integer> entry: linkDemandCopy.entrySet()){
+				 if(entry.getValue()==0){
+					 weights[nodesNum][entry.getKey()] = MAX_VALUE;
+				 }else{
+					 weights[nodesNum][entry.getKey()] = 0;
+				 }
+			 }
+			 dijkstra(nodesNum, weights, shortPaths, costs);
+			 int cost = costs[nodesNum+1];
+			 if(cost==MAX_VALUE)
+				 break;
+			 LinkedList<Integer> path = shortPaths.get(nodesNum+1);
+			 path.removeFirst();
+			 path.removeLast();
+			 int link = path.getFirst();
+			 int miniFlow = Math.min(getMiniFlow(path),linkDemandCopy.get(link));
+			 linkDemandCopy.put(link, linkDemandCopy.get(link)-miniFlow);
+			 updateBandWidth(path, miniFlow, UpdateOperator.MINUS);
+			 optPaths.add(new PCF(path, cost, miniFlow));
+			 
+		 }
+		return optPaths;
+	}
+	
+	
+    private int getMiniFlow(LinkedList<Integer> path){
+    	if(path.size()==1)
+    		return linkDemand.get(path.getFirst());
     	int miniFlow = MAX_VALUE;
     	for(int i=path.size()-1; i>0; i--){
     		int src = path.get(i);
@@ -340,23 +445,64 @@ public class Graph {
     	return miniFlow;
     }
     
+    private int getMiniCost(LinkedList<Integer> path){
+    	int cost = 0;
+    	for(int i=path.size()-1; i>0; i--){
+    		int src = path.get(i);
+    		int des = path.get(i-1);
+    		cost+=unitCosts[src][des];
+    	}
+    	return cost;
+    }
     
-	private void dijkstra(int src, Map<Integer, LinkedList<Integer>> shortPaths, int[] unitCosts){
-    	int nodesNum = this.nodesNum;
-    	int[][] costs = new int[nodesNum][nodesNum];
+    
+    private int[][] initWeights(){
+    	int[][] weights = new int[nodesNum][nodesNum];
     	//初始化图中单位租用费用信息和最大流量信息。不存在的链路单位租用费用设置为最大值，最大流量设置为0
     	for(int i=0; i<nodesNum; i++){
     		for(int j=0; j<nodesNum; j++){
     			if(this.unitCosts[i][j] == 0 || this.bandWidths[i][j] == 0){//没有对应的边
-    				costs[j][i] = MAX_VALUE;
+    				weights[j][i] = MAX_VALUE;
     			}else{
-    				costs[j][i]  =this.unitCosts[i][j];
+    				weights[j][i]  =this.unitCosts[i][j];
     			}
     		}
     	}
+    	return weights;
+    }
+    
+    private int[][] initWeights(List<Integer> servers){
+    	int[][] weights = new int[nodesNum+2][nodesNum+2];
+    	for(int i=0; i<nodesNum; i++){
+    		for(int j=0; j<nodesNum; j++){
+    			if(this.bandWidths[i][j] == 0){//没有对应的边
+    				weights[j][i] = MAX_VALUE;
+    			}else{
+    				weights[j][i]  =this.unitCosts[i][j];
+    			}
+    		}
+    	}
+    
+    	for(int i=0; i<nodesNum+2; i++){
+    		weights[i][nodesNum] = MAX_VALUE;
+    		weights[nodesNum][i] = MAX_VALUE;
+    		weights[i][nodesNum+1] = MAX_VALUE;
+    		weights[nodesNum+1][i] = MAX_VALUE;
+    	}
+    	for(int server:servers){
+    		weights[server][nodesNum+1] = 0;
+    	}
+
+    	return weights;
     	
+    }
+    
+
+    
+    
+	private void dijkstra(int src, int[][] weights, Map<Integer, LinkedList<Integer>> shortPaths, int[] unitCosts){
+    	int nodesNum = weights.length;
     	boolean isVisited[] = new boolean[nodesNum];//标记节点最短距离是否求出
-    	
     	//初始化节点 src 到其他节点的距离为无穷大
     	for(int i=0; i<unitCosts.length; i++){
     		unitCosts[i] = Integer.MAX_VALUE;
@@ -365,29 +511,33 @@ public class Graph {
     		list.add(i);
     		shortPaths.put(i, list);
     	}
+    	LinkedList<Integer> nodes = new LinkedList<>();
+    	for(int i=0; i< nodesNum; i++)
+    		nodes.add(i);
     	
     	isVisited[src] = true;
+    	nodes.remove(src);
     	unitCosts[src] = 0;
     	
-    	for(int count=1; count<nodesNum; count++){
+    	while(nodes.size()!=0){
     		int minDis = Integer.MAX_VALUE;
     		int nextNode = -1;
-    		for(int i=0; i<nodesNum; i++){
-				if(! isVisited[i] && costs[src][i] < minDis ){
-					minDis = costs[src][i];
-					nextNode = i;
+    		for(int node:nodes){
+				if(weights[src][node] < minDis ){
+					minDis = weights[src][node];
+					nextNode = node;
 				}
     		}
     		unitCosts[nextNode] = minDis;
-    		isVisited[nextNode] = true;
+    		nodes.remove(new Integer(nextNode));
     		//松弛操作
-    		for(int i=0; i<nodesNum; i++){
-				if(!isVisited[i] && costs[src][nextNode]+costs[nextNode][i]< costs[src][i]){
-					costs[src][i] = costs[src][nextNode] + costs[nextNode][i];
-					LinkedList<Integer> list = shortPaths.get(i);
+    		for(int node:nodes){
+				if( weights[src][nextNode]+weights[nextNode][node]< weights[src][node]){
+					weights[src][node] = weights[src][nextNode] + weights[nextNode][node];
+					LinkedList<Integer> list = shortPaths.get(node);
 					list.clear();
 					list.addAll(shortPaths.get(nextNode));
-					list.add(i);
+					list.add(node);
 				}
     		}
     	}
@@ -395,7 +545,135 @@ public class Graph {
 }
 
 
+class MCMF{
+	int nodesNum;
+	boolean[] vis;
+	int[] d;
+	int pre[];
+	int[][] cost;
+	int[][] cap;
+	int[][] inverseCap;
+	int[][] flows;
+	int totalCost;
+	LinkedList<Integer> list;
+	
+	public MCMF(Graph graph){
+		nodesNum = graph.nodesNum+2;
+		cost = new int[nodesNum][nodesNum];
+		cap = new int[nodesNum][nodesNum];
+		inverseCap = new int[nodesNum][nodesNum];
+		flows = new int[nodesNum][nodesNum];
 
+		 for(int i=0; i<nodesNum-2; i++){
+			 for(int j=0; j<nodesNum-2; j++){
+				 if(graph.bandWidths[i][j] > 0){
+					 cost[i][j] = graph.unitCosts[i][j];
+					 cap[i][j] = graph.bandWidths[i][j];
+				 }else{
+					 cost[i][j] = Graph.MAX_VALUE;
+					 cap[i][j] = 0; 
+				 }
+			 }
+		 }
+		 for(int server: graph.getServers()){
+			 cap[nodesNum-2][server] = Graph.MAX_VALUE;
+			 cost[nodesNum-2][server] = 0;
+			 cap[server][nodesNum-2] = 0;
+			 cost[server][nodesNum-2] = Graph.MAX_VALUE;
+		 }
+		 
+		 for(Entry<Integer, Integer> entry : graph.linkDemand.entrySet()){
+			 cap[nodesNum-1][entry.getKey()] = 0;
+			 cost[nodesNum-1][entry.getKey()] = Graph.MAX_VALUE;
+			 cap[entry.getKey()][nodesNum-1] = entry.getValue();
+			 cost[entry.getKey()][nodesNum-1] = 0;
+		 }
+		 totalCost = graph.getServers().size() * graph.serverCost;
+		 
+		 
+	}
+	public boolean spfa(){
+		vis = new boolean[nodesNum];
+		d = new int[nodesNum];
+		pre = new int[nodesNum];
+		list = new LinkedList<>();
+		int[] cnt = new int[nodesNum];
+		for(int i=0; i<nodesNum; i++){
+			d[i] = Graph.MAX_VALUE;
+			vis[i] = false;
+			pre[i] = -1;
+		}
+		d[nodesNum-2] = 0;
+		list.add(nodesNum-2);
+		while(!list.isEmpty()){
+			int u = list.removeFirst();
+			vis[u] = true;
+			cnt[u] ++;
+			for(int i=0; i<nodesNum; i++){
+				if(cap[u][i] > 0 || inverseCap[u][i] > 0){
+					int tmp;
+					if(cap[u][i] != 0)
+						tmp = inverseCap[u][i] == 0 ? cost[u][i] : -cost[u][i];
+					else
+						tmp = -cost[u][i];
+					if(d[i] > d[u] + tmp){
+						d[i] = d[u] + tmp;
+						pre[i] = u;
+					}
+					if(!vis[i]){
+						if(++cnt[i] == nodesNum)
+							return false;
+						if(!list.isEmpty() && d[i] < d[list.peek()])
+							list.addFirst(i);
+						else
+							list.addLast(i);
+						vis[i] = true;
+					}
+				}
+				
+			}
+		}
+		return d[nodesNum-1] < Graph.MAX_VALUE;
+	}
+	
+	
+	public int costFlow(){
+		int flow = Graph.MAX_VALUE;
+		for(int i=nodesNum-1; i!=nodesNum-2; i=pre[i]){
+			if(inverseCap[pre[i]][i] == 0)
+				flow = Math.min(flow, cap[pre[i]][i]);
+			else
+				flow = Math.min(flow, inverseCap[pre[i]][i]);
+		}
+		for(int i=nodesNum-1; i!=nodesNum-2; i=pre[i]){
+			if(inverseCap[pre[i]][i] == 0){
+				cap[pre[i]][i] -= flow;
+				flows[pre[i]][i] += flow;
+				if(pre[i] != nodesNum-2 && i != nodesNum-1){
+					inverseCap[i][pre[i]] += flow;
+				}
+			}else {
+				flows[i][pre[i]]-=flow;
+				cap[i][pre[i]] += flow;
+				inverseCap[pre[i]][i] -= flow;
+			}
+			
+		}
+		return flow;
+	}
+	
+	public int getCost(){
+		while(spfa()){
+			costFlow();
+		}
+		for(int i=0; i<nodesNum; i++){
+			for(int j=0; j<nodesNum; j++){
+				totalCost += cost[i][j] * Math.abs(flows[i][j]);
+			}
+		}
+		return totalCost;	
+	}
+}
 
 
 class PCF{

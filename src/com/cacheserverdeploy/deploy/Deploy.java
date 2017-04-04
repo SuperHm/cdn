@@ -1,12 +1,14 @@
 package com.cacheserverdeploy.deploy;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
 import com.cacheserverdeploy.deploy.Graph;
-import com.cacheserverdeploy.deploy.Graph.UpdateOperator;
+
 
 
 public class Deploy{
@@ -20,59 +22,56 @@ public class Deploy{
 	 * @return
 	 */
 	public static String[] deployServer(String[] graphContent){
+		long startTime = System.currentTimeMillis();
         Graph graph = null;
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
-//    	if(graph.nodesNum>400){
-//    		StringBuffer sb = new StringBuffer();
-//    		int cost = graph.getServers().size() * graph.serverCost;
-//	    	for(CLD cld: graph.clds){
-//	    		sb.append("\n"+cld.linked+" "+cld.client+" "+cld.demand);
-//	    		System.out.println(cld.linked+" "+cld.client+" cost: 0"+" flow:"+cld.demand);
-//	    	}
-//	    	System.out.println("cost:"+cost);
-//	    	return new String[]{graph.clds.size()+"", sb.toString()};
-//    	}
+//    	graph.randomClients();
     	graph.sortClients();
-//    	for(int randomServer: getRandomServers(graph.nodesNum,(int)(graph.nodesNum*0.02))){
-//    		graph.isServer[randomServer] = true;
-//    	}
-    	int pathNum = 0;
-    	 List<PCF> paths = null;
-		StringBuffer sb = new StringBuffer();
-		boolean changed=false;
+    	List<PCF> paths = null;
+		int miniCost = Integer.MAX_VALUE;
+		List<Integer> bestServers = null;
+		List<PCF> optPaths = null;;
+		List<List<Integer>> optServersList = new ArrayList<>();
+		List<Integer> optServers = null;
+		int[] nodeCount = new int[graph.nodesNum];
+		graph.getBestServers();
+		final long eachTime = System.currentTimeMillis()-startTime;
+		System.out.println(eachTime);
     	while(true){
-    		paths = graph.getBestServers();
-	    	changed = graph.update();
-	    	System.out.println(graph.printServers());
-	    	if(changed){
-	    		graph.recoverBandwidths();
-	    	}else{
-		    	int cost = graph.getServers().size() * graph.serverCost;
-		    	for(PCF pcf: paths){
-		    		int client = graph.linkClient.get(pcf.path.getFirst());
-		    		sb.append("\n");
-		    		System.out.print("\n");
-		    		for(int i=pcf.path.size()-1; i>=0; i--){
-		    			sb.append(pcf.path.get(i)+" ");
-		    			System.out.print(pcf.path.get(i)+" ");
-		    		}
-		    		sb.append(client+" "+pcf.flow);
-		    		System.out.print(client+" "+pcf.flow);
-		    		pathNum++;
-		    		cost += pcf.cost * pcf.flow;
-		    	}
-		    	System.out.println("\ncost:"+cost);
-		    	break;
-	    	}
+    		graph.update();
+    		graph.recover();
+    		MCMF mcmf = new MCMF(graph);
+    		int currCost = mcmf.getCost();
+    		paths = graph.getOptPaths(graph.getServers());
+    		optServers = graph.getServers();
+    		for(int server: optServers)
+    			nodeCount[server]++;
+    		if(currCost < miniCost){
+    			for(PCF pcf: paths)
+        			graph.plusNodeFlow(pcf);
+    			optServersList.add(optServers);
+    			graph.update();
+    			miniCost = currCost;
+    			graph.printServers();
+        		System.out.println(miniCost);
+    			bestServers = graph.getServers();
+    			optPaths = new ArrayList<>(paths);
+    		}else {
+				graph.recoverServers(bestServers);
+			}
+    		if(System.currentTimeMillis() - startTime > TIME_LIMIT-eachTime)
+    			break;
+	    	graph.recover();
+	    	graph.getBestServers();
+
     	}
-    	if(!changed)
-    		return new String[]{pathNum+"", sb.toString()};
-    	return new String[]{"NA"};
+    	return new String[]{optPaths.size()+"", graph.print(optPaths, bestServers)};
     }
 	
 	
+
 	public static Set<Integer> getRandomServers(int range, int num){
 		Set<Integer> servers = new HashSet<>();
 		Random random = new Random();
