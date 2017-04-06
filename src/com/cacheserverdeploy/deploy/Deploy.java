@@ -13,7 +13,7 @@ import com.cacheserverdeploy.deploy.Graph;
 
 public class Deploy{
 	private static int lineNum = 0;//网络图读取过程中标记行数
-	final  static long TIME_LIMIT = 88*1000;
+
 	
 	/**
 	 * 
@@ -22,46 +22,55 @@ public class Deploy{
 	 * @return
 	 */
 	public static String[] deployServer(String[] graphContent){
+		long timeLimit;
 		long startTime = System.currentTimeMillis();
         Graph graph = null;
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
+    	if(graph.nodesNum < 200){
+    		timeLimit = 65*1000;
+    	}else if(graph.nodesNum <400){
+    		timeLimit = 75*1000;
+    	}else{
+    		timeLimit = 88*1000;
+    	}
 //    	graph.randomClients();
     	graph.sortClients();
     	List<PCF> paths = null;
+		List<PCF> paths2 = null;
 		int miniCost = Integer.MAX_VALUE;
 		List<Integer> bestServers = null;
-		List<PCF> optPaths = null;;
+		List<PCF> optPaths = null;
+
 		List<List<Integer>> optServersList = new ArrayList<>();
 		List<Integer> optServers = null;
-		int[] nodeCount = new int[graph.nodesNum];
+//		int[] nodeCount = new int[graph.nodesNum];
 		graph.getBestServers();
 		final long eachTime = System.currentTimeMillis()-startTime;
 		System.out.println(eachTime);
+		int[][] optFlows = null;
     	while(true){
     		graph.update();
     		graph.recover();
     		MCMF mcmf = new MCMF(graph);
+    		int[][] flow = mcmf.flows;
     		int currCost = mcmf.getCost();
-    		paths = graph.getOptPaths(graph.getServers());
     		optServers = graph.getServers();
-    		for(int server: optServers)
-    			nodeCount[server]++;
     		if(currCost < miniCost){
     			for(PCF pcf: paths)
         			graph.plusNodeFlow(pcf);
-    			optServersList.add(optServers);
     			graph.update();
     			miniCost = currCost;
     			graph.printServers();
         		System.out.println(miniCost);
     			bestServers = graph.getServers();
+    			optFlows = flow;
     			optPaths = new ArrayList<>(paths);
     		}else {
 				graph.recoverServers(bestServers);
 			}
-    		if(System.currentTimeMillis() - startTime > TIME_LIMIT-eachTime)
+    		if(System.currentTimeMillis() - startTime > timeLimit-eachTime)
     			break;
 	    	graph.recover();
 	    	graph.getBestServers();

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 import sun.print.resources.serviceui_sv;
+import sun.security.action.GetBooleanAction;
 
 import java.util.Map.Entry;
 import java.util.Queue;
@@ -387,8 +388,10 @@ public class Graph {
 		if(minCost==MAX_VALUE)
 			return null;
 		double r = 0.2;
+		if(nodesNum > 200)
+			r = 0.15;
 		if(nodesNum > 400)
-			r = 0.05;
+			r = 0.1;
 		if(Math.random() < r){
 			candidate = servers.get((int)(Math.random() * servers.size()));
 			
@@ -430,6 +433,63 @@ public class Graph {
 		return optPaths;
 	}
 	
+	
+	public int[][] getFlows(){
+		int[][] flow = new int[nodesNum][nodesNum];
+		for(int i=0; i<nodesNum; i++){
+			for(int j=0; j<nodesNum; j++){
+				flow[i][j] = bandWidthsBak[i][j] - bandWidths[i][j];
+			}
+		}
+		
+		for(int i=0; i<nodesNum; i++){
+			for(int j=i; j<nodesNum; j++){
+				if(flow[i][j] > flow[j][i]){
+					flow[i][j] = flow[i][j] - flow[j][i];
+					flow[j][i] = 0;
+				}else{
+					flow[j][i] = flow[j][i] - flow[i][j];
+					flow[i][j] = 0;
+				}
+			}
+		}
+		return flow;
+	}
+	
+	
+	public LinkedList<PCF> getPaths(int[][] flows){
+		int nodesNum = flows.length;
+		int des = flows.length-1;
+		int maxflow = totalDemand;
+		LinkedList<PCF> pcfs = new LinkedList<>(); 
+		while(true){
+			int src = flows.length-2;
+			LinkedList<Integer> path = new LinkedList<>();
+			path.add(src);
+			int miniFlow = MAX_VALUE;
+			while(src != des){
+				for(int node=0; node<nodesNum; node++){
+					if(flows[src][node] > 0){
+						path.add(node);
+						if(flows[src][node]<miniFlow)
+							miniFlow = flows[src][node];
+						src = node;
+						break;
+					}
+				}
+			}
+			for(int i=0; i<path.size()-1; i++){
+				flows[path.get(i)][path.get(i+1)] -= miniFlow;
+			}
+			path.remove(0);
+			path.remove(path.size()-1);
+			pcfs.add(new PCF(path, getMiniCost(path), miniFlow));
+			maxflow -= miniFlow;
+			if(maxflow == 0)
+				break;
+		}
+		return pcfs;
+	}
 	
     private int getMiniFlow(LinkedList<Integer> path){
     	if(path.size()==1)
