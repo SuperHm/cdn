@@ -38,10 +38,7 @@ public class Graph {
 	int[] nodeFlow; //流经节点的流量和
 	int[] nodeCost; //每个节点流经流量花费的代价
 	int totalDemand;//所有消费节点的需求和
-	
 	boolean[] isServer; //是否为服务器节点
-	
-
 	boolean[] forbid;
 
 
@@ -121,13 +118,15 @@ public class Graph {
 	/**
 	 * 恢复图中带宽及其它信息
 	 */
-	public void recover(){
+	public void reset(){
 		nodeCost = new int[nodesNum];
 		nodeFlow = new int[nodesNum];
 		forbid = new boolean[nodesNum];
 		for(int i=0; i<nodesNum; i++)
-			for(int j=0; j<nodesNum; j++)
+			for(int j=0; j<nodesNum; j++){
 				bandWidths[i][j] = bandWidthsBak[i][j];
+				unitCosts[i][j] = unitCostsBak[i][j];
+			}
 	}
 
 	/**
@@ -322,7 +321,6 @@ public class Graph {
     	return miniFlow;
     }
     
-	
 	/**
 	 * 根据各节点流量获取最优路径
 	 * 
@@ -680,7 +678,6 @@ public class Graph {
 			cost[entry.getKey()][nodesNum-1] = 0;
 		}
 	}
-	
 	public boolean SPFA(int[] pre, int[][] cap, int[][] inverseCap, int[][] cost){
 		boolean[] vis = new boolean[nodesNum];
 		int[] dis = new int[nodesNum];
@@ -723,9 +720,6 @@ public class Graph {
 		}
 		return dis[nodesNum-1] < Graph.MAX_VALUE;
 	}
-	
-
-
 }
 
 
@@ -751,7 +745,6 @@ class TwoTuple<A, B>{
 		this.fir = fir;
 		this.sec = sec;
 	}
-	
 	@Override
 	public String toString(){
 		return fir + " " +sec ;
