@@ -1,14 +1,8 @@
 package com.cacheserverdeploy.deploy;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedList;
+
 import java.util.List;
-import java.util.Random;
-import java.util.Set;
-
 import com.cacheserverdeploy.deploy.Graph;
-
 
 
 public class Deploy{
@@ -28,71 +22,60 @@ public class Deploy{
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
+    	graph.setUnitcostsOfZeroBnadWidth();
+    	
     	if(graph.nodesNum < 200){
     		timeLimit = 65*1000;
     	}else if(graph.nodesNum <400){
     		timeLimit = 75*1000;
     	}else{
-    		timeLimit = 88*1000;
+    		timeLimit = 85*1000;
     	}
-//    	graph.randomClients();
+    	
     	graph.sortClients();
     	List<PCF> paths = null;
-		List<PCF> paths2 = null;
 		int miniCost = Integer.MAX_VALUE;
-		List<Integer> bestServers = null;
-		List<PCF> optPaths = null;
-
-		List<List<Integer>> optServersList = new ArrayList<>();
-		List<Integer> optServers = null;
-//		int[] nodeCount = new int[graph.nodesNum];
-		graph.getBestServers();
-		final long eachTime = System.currentTimeMillis()-startTime;
-		System.out.println(eachTime);
 		int[][] optFlows = null;
+		List<Integer> optServers = null;
+		
+		graph.simulateGame();
+		final long eachTime = System.currentTimeMillis()-startTime;//仿真博弈一次需要的时间
+		
+		System.out.println(eachTime);
+		TwoTuple<int[][], Integer> result;
     	while(true){
-    		graph.update();
-    		graph.recover();
-    		MCMF mcmf = new MCMF(graph);
-    		int[][] flow = mcmf.flows;
-    		int currCost = mcmf.getCost();
-    		optServers = graph.getServers();
+    		graph.updateServers();
+    		result = graph.MCMF();
+    		int[][] flow = result.fir;
+    		int currCost = result.sec;    	
+//    		for(int server: optServers)
+//    			nodeCount[server]++;
+    		
     		if(currCost < miniCost){
-    			for(PCF pcf: paths)
-        			graph.plusNodeFlow(pcf);
-    			graph.update();
+    			optServers = graph.getServers();
     			miniCost = currCost;
-    			graph.printServers();
-        		System.out.println(miniCost);
-    			bestServers = graph.getServers();
     			optFlows = flow;
-    			optPaths = new ArrayList<>(paths);
+//    			for(PCF pcf: paths)
+//        			graph.plusNodeFlow(pcf);
+//    			graph.updateServers();
+
+    			graph.printServers();
+        		System.out.println(miniCost);    
     		}else {
-				graph.recoverServers(bestServers);
+				graph.setServers(optServers);
 			}
     		if(System.currentTimeMillis() - startTime > timeLimit-eachTime)
     			break;
 	    	graph.recover();
-	    	graph.getBestServers();
+	    	graph.simulateGame();
 
     	}
-    	return new String[]{optPaths.size()+"", graph.print(optPaths, bestServers)};
+    	paths = graph.getPaths(optFlows);
+    	return new String[]{paths.size()+"", graph.print(paths, optServers)};
     }
 	
 	
 
-	public static Set<Integer> getRandomServers(int range, int num){
-		Set<Integer> servers = new HashSet<>();
-		Random random = new Random();
-		while(num != 0){
-			int server = random.nextInt(range);
-			if(!servers.contains(server)){
-				servers.add(server);
-				num--;
-			}
-		}
-		return servers;
-	}
     /**
      * 读取网络节点数量、消费节点数量、服务器部署成本、网络链路数量。基于此信息初始化 Graph
      * 
