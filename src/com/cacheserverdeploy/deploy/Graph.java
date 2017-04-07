@@ -645,6 +645,7 @@ public class Graph {
 		int[] pre = new int[N];
 		int totalFlow = 0;
 		while(SPFA(pre, cap, inverseCap, cost)){
+			printPath(pre);
 			int flow = Graph.MAX_VALUE;
 			for(int i=nodesNum-1; i!=nodesNum-2; i=pre[i]){
 				if(inverseCap[pre[i]][i] == 0)
@@ -664,7 +665,6 @@ public class Graph {
 				}
 			}
 			totalFlow += flow;
-			printPath(pre);
 		}
 		System.out.println("maxFlow:"+totalFlow);
 		for(int i=0; i<N; i++){
@@ -686,7 +686,7 @@ public class Graph {
 		int src = pre.length-2;
 		int des = pre.length-1;
 		StringBuffer sb = new StringBuffer();
-		for(int i = src; pre[i]!=des; i=pre[i])
+		for(int i = des; pre[i]!=src; i=pre[i])
 			sb.append(i+" ");
 		System.out.println(sb.toString());
 	}
@@ -712,7 +712,7 @@ public class Graph {
 			capBak[nodesNum-1][i] = 0;
 			cost[nodesNum-1][i] = MAX_VALUE;
 		}
-		
+		printServers();
 		for(int server: this.getServers()){
 			cap[nodesNum-2][server] = Graph.MAX_VALUE;
 			capBak[nodesNum-2][server] = Graph.MAX_VALUE;

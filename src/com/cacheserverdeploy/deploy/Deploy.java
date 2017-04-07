@@ -44,6 +44,7 @@ public class Deploy{
 		TwoTuple<int[][], Integer> result;
     	while(true){
     		graph.updateServers();
+    		graph.printServers();
     		graph.reset();
     		result = graph.MCMF();
     		int[][] flow = result.fir;
