@@ -105,19 +105,6 @@ public class Graph {
 	}
 	
 	/**
-	 * 将无边的两点之间unitcost设置为最大
-	 */
-	public void setUnitcostsOfZeroBnadWidth(){
-		for(int i=0; i<nodesNum; i++){
-			for(int j=0; j<nodesNum; j++){
-				if(bandWidths[i][j] == 0){
-					unitCosts[i][j] = MAX_VALUE;
-				}
-			}
-		}
-	}
-	
-	/**
 	 * 恢复图中带宽及其它信息
 	 */
 	public void reset(){
@@ -528,10 +515,8 @@ public class Graph {
 		
 		//加入一定随机因素，改变纯贪婪策略
 		double r = 0.2;
-		if(nodesNum > 200)
-			r = 0.15;
 		if(nodesNum > 400)
-			r = 0.1;
+			r = 0.05;
 		if(Math.random() < r){
 			candidate = servers.get((int)(Math.random() * servers.size()));
 			minCost = costs[candidate];
@@ -546,7 +531,7 @@ public class Graph {
     	//初始化图中单位租用费用信息和最大流量信息。不存在的链路单位租用费用设置为最大值，最大流量设置为0
     	for(int i=0; i<nodesNum; i++){
     		for(int j=0; j<nodesNum; j++){
-    			if(this.bandWidths[i][j] == 0){//没有对应的边
+    			if(this.unitCosts[i][j] ==0 || this.bandWidths[i][j] == 0){//没有对应的边
     				weights[j][i] = MAX_VALUE;
     			}else{
     				weights[j][i]  =this.unitCosts[i][j];
@@ -640,12 +625,11 @@ public class Graph {
 		int[][] cap = new int[N][N];
 		int[][] capBak = new int[N][N];
 		int[][] inverseCap = new int[N][N];
-		int totalCost = 0;
+		int totalCost = getServers().size() * serverCost;
 		initMCMF(cost, cap, capBak, N);
 		int[] pre = new int[N];
 		int totalFlow = 0;
 		while(SPFA(pre, cap, inverseCap, cost, N)){
-			printPath(pre);
 			int flow = Graph.MAX_VALUE;
 			for(int i=N-1; i!=N-2; i=pre[i]){
 				if(inverseCap[pre[i]][i] == 0)
@@ -666,15 +650,10 @@ public class Graph {
 			}
 			totalFlow += flow;
 		}
-		System.out.println("maxFlow:"+totalFlow);
+//		System.out.println("maxFlow:"+totalFlow);
 		for(int i=0; i<N; i++){
 			for(int j=0; j<N; j++){
 				flows[i][j] = capBak[i][j] - cap[i][j];
-			}
-		}
-				
-		for(int i=0; i<N; i++){
-			for(int j=0; j<N; j++){
 				totalCost += cost[i][j] * flows[i][j];
 			}
 		}
@@ -712,7 +691,6 @@ public class Graph {
 			capBak[nodesNum-1][i] = 0;
 			cost[nodesNum-1][i] = MAX_VALUE;
 		}
-		printServers();
 		for(int server: this.getServers()){
 			cap[nodesNum-2][server] = Graph.MAX_VALUE;
 			capBak[nodesNum-2][server] = Graph.MAX_VALUE;

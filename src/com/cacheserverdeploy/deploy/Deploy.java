@@ -22,14 +22,8 @@ public class Deploy{
         graph = readProblemLine(graphContent);
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
-    	graph.setUnitcostsOfZeroBnadWidth();
-    	if(graph.nodesNum < 200){
-    		timeLimit = 65*1000;
-    	}else if(graph.nodesNum <400){
-    		timeLimit = 75*1000;
-    	}else{
-    		timeLimit = 85*1000;
-    	}
+  
+    	timeLimit = 85*1000;
     	
     	graph.sortClients();
     	List<PCF> paths = null;
@@ -37,14 +31,13 @@ public class Deploy{
 		int[][] optFlows = null;
 		List<Integer> optServers = null;
 		
-		paths = graph.simulateGame();
+		graph.simulateGame();
 		final long eachTime = System.currentTimeMillis()-startTime;//仿真博弈一次需要的时间
 		
 		System.out.println(eachTime);
 		TwoTuple<int[][], Integer> result;
     	while(true){
     		graph.updateServers();
-    		graph.printServers();
     		graph.reset();
     		result = graph.MCMF();
     		int[][] flow = result.fir;
@@ -52,12 +45,13 @@ public class Deploy{
 //    		for(int server: optServers)
 //    			nodeCount[server]++;
     		if(currCost < miniCost){
+//    			paths = graph.getPaths(flow);
+//    			for(PCF pcf: paths)
+//    				graph.plusNodeFlow(pcf);
+//				graph.updateServers();
     			optServers = graph.getServers();
     			miniCost = currCost;
     			optFlows = flow;
-//    			for(PCF pcf: paths)
-//        			graph.plusNodeFlow(pcf);
-//    			graph.updateServers();
     			graph.printServers();
         		System.out.println(miniCost);    
     		}else {
@@ -65,7 +59,7 @@ public class Deploy{
 			}
     		if(System.currentTimeMillis() - startTime > timeLimit-eachTime)
     			break;
-	    	paths = graph.simulateGame();
+	    	graph.simulateGame();
     	}
     	paths = graph.getPaths(optFlows);
     	return new String[]{paths.size()+"", graph.print(paths, optServers)};
