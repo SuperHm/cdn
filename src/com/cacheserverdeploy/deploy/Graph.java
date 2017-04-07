@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.sun.org.glassfish.external.statistics.annotations.Reset;
 
 
 /**
@@ -380,7 +379,7 @@ public class Graph {
 	/**
 	 * 模拟博弈过程，每个消费节点作为带宽需求者
 	 */
-    public void simulateGame(){
+    public List<PCF> simulateGame(){
     	List<PCF> pcfs = new LinkedList<>();
     	nodeCost = new int[nodesNum];
     	nodeFlow = new int[nodesNum];
@@ -484,6 +483,7 @@ public class Graph {
     		pcfs.addAll(optiPaths);
     		unsats.remove(curr);
     	}
+       	return pcfs;
 	}
     
     
@@ -638,9 +638,10 @@ public class Graph {
 		int[][] flows = new int[N][N];
 		int cost[][] = new int[N][N];
 		int[][] cap = new int[N][N];
+		int[][] capBak = new int[N][N];
 		int[][] inverseCap = new int[N][N];
 		int totalCost = 0;
-		initMCMF(cost, cap, N);
+		initMCMF(cost, cap, capBak, N);
 		int[] pre = new int[N];
 		int totalFlow = 0;
 		while(SPFA(pre, cap, inverseCap, cost)){
@@ -654,19 +655,24 @@ public class Graph {
 			for(int i=nodesNum-1; i!=nodesNum-2; i=pre[i]){
 				if(inverseCap[pre[i]][i] == 0){
 					cap[pre[i]][i] -= flow;
-					flows[pre[i]][i] += flow;
 					if(pre[i] != nodesNum-2 && i != nodesNum-1){
 						inverseCap[i][pre[i]] += flow;
 					}
 				}else {
-					flows[i][pre[i]]-=flow;
 					cap[i][pre[i]] += flow;
 					inverseCap[pre[i]][i] -= flow;
 				}
 			}
 			totalFlow += flow;
+			printPath(pre);
 		}
 		System.out.println("maxFlow:"+totalFlow);
+		for(int i=0; i<N; i++){
+			for(int j=0; j<N; j++){
+				flows[i][j] = capBak[i][j] - cap[i][j];
+			}
+		}
+				
 		for(int i=0; i<nodesNum; i++){
 			for(int j=0; j<nodesNum; j++){
 				totalCost += cost[i][j] * flows[i][j];
@@ -675,24 +681,47 @@ public class Graph {
 		return new TwoTuple<>(flows, totalCost);
 		
 	}
-	private void initMCMF(int[][] cost, int[][] cap, int nodesNum){
+	
+	private void printPath(int[] pre){
+		int src = pre.length-2;
+		int des = pre.length-1;
+		StringBuffer sb = new StringBuffer();
+		for(int i = src; pre[i]!=des; i=pre[i])
+			sb.append(i+" ");
+		System.out.println(sb.toString());
+	}
+	private void initMCMF(int[][] cost, int[][] cap, int[][] capBak, int nodesNum){
 		for(int i=0; i<nodesNum-2; i++){
 			for(int j=0; j<nodesNum-2; j++){
 				cost[i][j] = unitCosts[i][j];
 				cap[i][j] =  bandWidthsBak[i][j];
+				capBak[i][j] =  bandWidthsBak[i][j];
 			}
 		}
+		for(int i=0; i<nodesNum; i++){
+			cap[i][nodesNum-2] = 0;
+			capBak[i][nodesNum-2] = 0;
+			cost[i][nodesNum-2] = MAX_VALUE;
+			cap[nodesNum-2][i] = 0;
+			capBak[nodesNum-2][i] = 0;
+			cost[nodesNum-2][i] = MAX_VALUE;
+			cap[i][nodesNum-1] = 0;
+			capBak[i][nodesNum-1] = 0;
+			cost[i][nodesNum-1] = MAX_VALUE;
+			cap[nodesNum-1][i] = 0;
+			capBak[nodesNum-1][i] = 0;
+			cost[nodesNum-1][i] = MAX_VALUE;
+		}
+		
 		for(int server: this.getServers()){
 			cap[nodesNum-2][server] = Graph.MAX_VALUE;
+			capBak[nodesNum-2][server] = Graph.MAX_VALUE;
 			cost[nodesNum-2][server] = 0;
-			cap[server][nodesNum-2] = 0;
-			cost[server][nodesNum-2] = Graph.MAX_VALUE;
 		}
 		 
 		for(Entry<Integer, Integer> entry : this.linkDemand.entrySet()){
-			cap[nodesNum-1][entry.getKey()] = 0;
-			cost[nodesNum-1][entry.getKey()] = Graph.MAX_VALUE;
 			cap[entry.getKey()][nodesNum-1] = entry.getValue();
+			capBak[entry.getKey()][nodesNum-1] = entry.getValue();
 			cost[entry.getKey()][nodesNum-1] = 0;
 		}
 	}

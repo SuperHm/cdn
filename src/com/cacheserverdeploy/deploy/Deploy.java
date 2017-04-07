@@ -37,13 +37,14 @@ public class Deploy{
 		int[][] optFlows = null;
 		List<Integer> optServers = null;
 		
-		graph.simulateGame();
+		paths = graph.simulateGame();
 		final long eachTime = System.currentTimeMillis()-startTime;//仿真博弈一次需要的时间
 		
 		System.out.println(eachTime);
 		TwoTuple<int[][], Integer> result;
     	while(true){
     		graph.updateServers();
+    		graph.reset();
     		result = graph.MCMF();
     		int[][] flow = result.fir;
     		int currCost = result.sec;    	
@@ -63,8 +64,7 @@ public class Deploy{
 			}
     		if(System.currentTimeMillis() - startTime > timeLimit-eachTime)
     			break;
-	    	graph.reset();
-	    	graph.simulateGame();
+	    	paths = graph.simulateGame();
     	}
     	paths = graph.getPaths(optFlows);
     	return new String[]{paths.size()+"", graph.print(paths, optServers)};
