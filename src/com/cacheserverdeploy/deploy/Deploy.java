@@ -1,6 +1,7 @@
 package com.cacheserverdeploy.deploy;
 
 
+
 import java.util.List;
 import com.cacheserverdeploy.deploy.Graph;
 
@@ -35,31 +36,28 @@ public class Deploy{
 		final long eachTime = System.currentTimeMillis()-startTime;//仿真博弈一次需要的时间
 		
 		System.out.println(eachTime);
-		TwoTuple<int[][], Integer> result;
     	while(true){
     		graph.updateServers();
     		graph.reset();
-    		result = graph.MCMF();
-    		int[][] flow = result.fir;
-    		int currCost = result.sec;    	
-//    		for(int server: optServers)
-//    			nodeCount[server]++;
+    		paths = graph.getOptPaths(graph.getServers());
+    		int currCost = graph.getCost(paths);
     		if(currCost < miniCost){
-//    			paths = graph.getPaths(flow);
-//    			for(PCF pcf: paths)
-//    				graph.plusNodeFlow(pcf);
-//				graph.updateServers();
+    			optFlows = graph.getFlows(paths);
+    			graph.reset();
+    			for(PCF pcf: paths)
+    				graph.plusNodeFlow(pcf);
+				graph.updateServers(); 
     			optServers = graph.getServers();
     			miniCost = currCost;
-    			optFlows = flow;
     			graph.printServers();
-        		System.out.println(miniCost);    
+        		System.out.println(miniCost);
     		}else {
 				graph.setServers(optServers);
 			}
     		if(System.currentTimeMillis() - startTime > timeLimit-eachTime)
     			break;
-	    	graph.simulateGame();
+    		graph.reset();
+	    	paths = graph.simulateGame();
     	}
     	paths = graph.getPaths(optFlows);
     	return new String[]{paths.size()+"", graph.print(paths, optServers)};

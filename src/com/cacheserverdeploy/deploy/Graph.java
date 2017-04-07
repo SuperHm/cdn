@@ -35,7 +35,6 @@ public class Graph {
 	final int[][] unitCosts; //单位单款租用费用
 	Map<Integer, Integer> linkClient; //与消费节点直连点与其对应的消费节点
 	Map<Integer, Integer> linkDemand; //与消费节点直连点与其对应的需求
-	Map<Integer, List<Integer>> neighbors;
 	int[] nodeFlow; //流经节点的流量和
 	int[] nodeCost; //每个节点流经流量花费的代价
 	int totalDemand;//所有消费节点的需求和
@@ -56,7 +55,6 @@ public class Graph {
 		this.nodesNum = nodesNum;
 		this.linkClient = new HashMap<>();	
 		this.linkDemand = new LinkedHashMap<>();
-		this.neighbors = new HashMap<>();
 		this.nodeFlow = new int[nodesNum];
 		this.nodeCost = new int[nodesNum];
 		this.forbid = new boolean[nodesNum];
@@ -66,7 +64,6 @@ public class Graph {
 			this.bandWidths[i][i] = 0;
 			this.bandWidthsBak[i][i] = 0;
 			this.unitCosts[i][i] = MAX_VALUE;
-			this.neighbors.put(i, new LinkedList<>());
 		}
 		
 	}
@@ -86,8 +83,6 @@ public class Graph {
 		this.bandWidthsBak[des][src] = bandWidth;
 		this.unitCosts[src][des] = unitCost;
 		this.unitCosts[des][src] = unitCost;
-		this.neighbors.get(src).add(des);
-		this.neighbors.get(des).add(src);
 	}
 	
 	/**
@@ -514,9 +509,9 @@ public class Graph {
 			return null;
 		
 		//加入一定随机因素，改变纯贪婪策略
-		double r = 0.2;
+		double r = 0.25;
 		if(nodesNum > 400)
-			r = 0.05;
+			r = 0.03;
 		if(Math.random() < r){
 			candidate = servers.get((int)(Math.random() * servers.size()));
 			minCost = costs[candidate];
@@ -525,6 +520,71 @@ public class Graph {
 		LinkedList<Integer> optPath = shortPaths.get(candidate);
 		return new PCF(optPath, minCost, calculatePathFlow(optPath));
 	}
+    
+    public int getCost(List<PCF> paths){
+		int cost = getServers().size() * serverCost;
+		for(PCF pcf: paths){		
+    		cost += pcf.cost * pcf.flow;
+    	}
+		return cost;
+	}
+    
+    public List<PCF> getOptPaths(List<Integer> servers){
+		 List<PCF> optPaths = new LinkedList<>();
+		 Map<Integer, LinkedList<Integer>> shortPaths = new HashMap<>();
+		 int[] costs = new int[nodesNum+2];
+		 Map<Integer, Integer> linkDemandCopy = new HashMap<>(linkDemand);
+		 while(true){
+			 int[][] weights = initWeights(servers);
+			 for(Entry<Integer, Integer> entry: linkDemandCopy.entrySet()){
+				 if(entry.getValue()==0){
+					 weights[nodesNum][entry.getKey()] = MAX_VALUE;
+				 }else{
+					 weights[nodesNum][entry.getKey()] = 0;
+				 }
+			 }
+			 dijkstra(nodesNum, weights, shortPaths, costs);
+			 int cost = costs[nodesNum+1];
+			 if(cost==MAX_VALUE)
+				 break;
+			 LinkedList<Integer> path = shortPaths.get(nodesNum+1);
+			 path.removeFirst();
+			 path.removeLast();
+			 int link = path.getFirst();
+			 int miniFlow = Math.min(calculatePathFlow(path),linkDemandCopy.get(link));
+			 linkDemandCopy.put(link, linkDemandCopy.get(link)-miniFlow);
+			 minusBandWidth(path, miniFlow);
+			 optPaths.add(new PCF(path, cost, miniFlow));
+			 
+		 }
+		return optPaths;
+	}
+    
+    private int[][] initWeights(List<Integer> servers){
+    	int[][] weights = new int[nodesNum+2][nodesNum+2];
+    	for(int i=0; i<nodesNum; i++){
+    		for(int j=0; j<nodesNum; j++){
+    			if(this.bandWidths[i][j] == 0){//没有对应的边
+    				weights[j][i] = MAX_VALUE;
+    			}else{
+    				weights[j][i]  =this.unitCosts[i][j];
+    			}
+    		}
+    	}
+    
+    	for(int i=0; i<nodesNum+2; i++){
+    		weights[i][nodesNum] = MAX_VALUE;
+    		weights[nodesNum][i] = MAX_VALUE;
+    		weights[i][nodesNum+1] = MAX_VALUE;
+    		weights[nodesNum+1][i] = MAX_VALUE;
+    	}
+    	for(int server:servers){
+    		weights[server][nodesNum+1] = 0;
+    	}
+
+    	return weights;
+    	
+    }
     
     private int[][] initWeights(){
     	int[][] weights = new int[nodesNum][nodesNum];
@@ -541,12 +601,18 @@ public class Graph {
     	return weights;
     }
 	//TODO 需要删除
-	public int[][] getFlows(){
-		int[][] flow = new int[nodesNum][nodesNum];
-		for(int i=0; i<nodesNum; i++){
-			for(int j=0; j<nodesNum; j++){
-				flow[i][j] = bandWidthsBak[i][j] - bandWidths[i][j];
+	public int[][] getFlows(List<PCF> pcfs){
+		int[][] flow = new int[nodesNum+2][nodesNum+2];
+		for(PCF pcf: pcfs){
+			flow[nodesNum][pcf.path.getLast()]+=pcf.flow;
+			flow[pcf.path.getFirst()][nodesNum+1]+=pcf.flow;
+			for(int i=pcf.path.size()-1; i>0; i--){
+				int src = pcf.path.get(i);
+
+				int des = pcf.path.get(i-1);
+				flow[src][des] += pcf.flow;
 			}
+			
 		}
 		
 		for(int i=0; i<nodesNum; i++){
@@ -628,7 +694,6 @@ public class Graph {
 		int totalCost = getServers().size() * serverCost;
 		initMCMF(cost, cap, capBak, N);
 		int[] pre = new int[N];
-		int totalFlow = 0;
 		while(SPFA(pre, cap, inverseCap, cost, N)){
 			int flow = Graph.MAX_VALUE;
 			for(int i=N-1; i!=N-2; i=pre[i]){
@@ -638,17 +703,25 @@ public class Graph {
 					flow = Math.min(flow, inverseCap[pre[i]][i]);
 			}
 			for(int i=N-1; i!=N-2; i=pre[i]){
-				if(inverseCap[pre[i]][i] == 0){
+				if(inverseCap[i][pre[i]] == 0){
 					cap[pre[i]][i] -= flow;
-					if(pre[i] != N-2 && i != N-1){
-						inverseCap[i][pre[i]] += flow;
-					}
+					if(cap[pre[i]][i] == 0)
+						cost[pre[i]][i] = MAX_VALUE;
+					
+					inverseCap[i][pre[i]] += flow;
+					cost[i][pre[i]] = - cost[pre[i]][i];
+					
 				}else {
-					cap[i][pre[i]] += flow;
-					inverseCap[pre[i]][i] -= flow;
+					if(cap[pre[i]][i] == 0)
+						cost[pre[i]][i] = -cost[i][pre[i]];
+					cap[pre[i]][i] += flow;
+					
+					inverseCap[i][pre[i]] -= flow;
+					if(inverseCap[i][pre[i]] == 0){
+						cost[i][pre[i]] = -cost[i][pre[i]];
+					}
 				}
 			}
-			totalFlow += flow;
 		}
 //		System.out.println("maxFlow:"+totalFlow);
 		for(int i=0; i<N; i++){
@@ -661,14 +734,7 @@ public class Graph {
 		
 	}
 	
-	private void printPath(int[] pre){
-		int src = pre.length-2;
-		int des = pre.length-1;
-		StringBuffer sb = new StringBuffer();
-		for(int i = des; i !=src; i=pre[i])
-			sb.append(i+" ");
-		System.out.println(sb.toString());
-	}
+
 	private void initMCMF(int[][] cost, int[][] cap, int[][] capBak, int nodesNum){
 		for(int i=0; i<nodesNum-2; i++){
 			for(int j=0; j<nodesNum-2; j++){
