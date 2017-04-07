@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import com.sun.org.glassfish.external.statistics.annotations.Reset;
+
 
 /**
  * 
@@ -32,9 +34,9 @@ public class Graph {
 	final int[][] bandWidths; //节点间的带宽
 	final int[][] bandWidthsBak; //带宽数据备份
 	final int[][] unitCosts; //单位单款租用费用
-	final int[][] unitCostsBak;
-	final Map<Integer, Integer> linkClient; //与消费节点直连点与其对应的消费节点
-	final Map<Integer, Integer> linkDemand; //与消费节点直连点与其对应的需求
+	Map<Integer, Integer> linkClient; //与消费节点直连点与其对应的消费节点
+	Map<Integer, Integer> linkDemand; //与消费节点直连点与其对应的需求
+	Map<Integer, List<Integer>> neighbors;
 	int[] nodeFlow; //流经节点的流量和
 	int[] nodeCost; //每个节点流经流量花费的代价
 	int totalDemand;//所有消费节点的需求和
@@ -49,21 +51,23 @@ public class Graph {
 		this.bandWidths = new int[nodesNum][nodesNum];
 		this.bandWidthsBak = new int[nodesNum][nodesNum];
 		this.unitCosts = new int[nodesNum][nodesNum];
-		this.unitCostsBak = new int[nodesNum][nodesNum];
 		this.serverCost = serverCost;
 		this.linkNum = linkNum;
 		this.clientsNum = clientsNum;
 		this.nodesNum = nodesNum;
-		this.linkClient = new LinkedHashMap<>();	
-		this.linkDemand = new HashMap<>();
+		this.linkClient = new HashMap<>();	
+		this.linkDemand = new LinkedHashMap<>();
+		this.neighbors = new HashMap<>();
 		this.nodeFlow = new int[nodesNum];
 		this.nodeCost = new int[nodesNum];
 		this.forbid = new boolean[nodesNum];
 		this.isServer = new boolean[nodesNum];
 		for(int i=0; i<nodesNum; i++){
 			this.nodes.add(i);
-			this.bandWidths[i][i] = MAX_VALUE;
-			this.bandWidthsBak[i][i] = MAX_VALUE;
+			this.bandWidths[i][i] = 0;
+			this.bandWidthsBak[i][i] = 0;
+			this.unitCosts[i][i] = MAX_VALUE;
+			this.neighbors.put(i, new LinkedList<>());
 		}
 		
 	}
@@ -83,8 +87,8 @@ public class Graph {
 		this.bandWidthsBak[des][src] = bandWidth;
 		this.unitCosts[src][des] = unitCost;
 		this.unitCosts[des][src] = unitCost;
-		this.unitCostsBak[src][des] = unitCost;
-		this.unitCostsBak[des][src] = unitCost;
+		this.neighbors.get(src).add(des);
+		this.neighbors.get(des).add(src);
 	}
 	
 	/**
@@ -109,7 +113,6 @@ public class Graph {
 			for(int j=0; j<nodesNum; j++){
 				if(bandWidths[i][j] == 0){
 					unitCosts[i][j] = MAX_VALUE;
-					unitCostsBak[i][j] = MAX_VALUE;
 				}
 			}
 		}
@@ -125,9 +128,10 @@ public class Graph {
 		for(int i=0; i<nodesNum; i++)
 			for(int j=0; j<nodesNum; j++){
 				bandWidths[i][j] = bandWidthsBak[i][j];
-				unitCosts[i][j] = unitCostsBak[i][j];
 			}
 	}
+	
+	
 
 	/**
 	 * 获取服务器节点
@@ -205,8 +209,6 @@ public class Graph {
 		for(int i=path.size()-1; i>0; i--){
 			src = path.get(i);
 			des = path.get(i-1);
-			if(bandWidths[src][des] == 0)
-				unitCosts[src][des] = unitCostsBak[src][des];
 			bandWidths[src][des] = bandWidths[src][des] + increment;
 		}
 	}
@@ -224,8 +226,6 @@ public class Graph {
 			src = path.get(i);
 			des = path.get(i-1);
 			bandWidths[src][des] = bandWidths[src][des] - increment;
-			if(bandWidths[src][des] == 0)
-				unitCosts[src][des] = MAX_VALUE;
 		}
 	}
 	
@@ -240,8 +240,10 @@ public class Graph {
 				return o1.getValue() - o2.getValue();
 			}
 		});
+    	LinkedHashMap<Integer, Integer> tmp = new LinkedHashMap<>();
     	for(Map.Entry<Integer, Integer> entry: entryList)
-    		linkDemand.put(entry.getKey(), entry.getValue());
+    		tmp.put(entry.getKey(), entry.getValue());
+    	linkDemand = tmp;
 	}
 	
 	/**
@@ -250,8 +252,10 @@ public class Graph {
 	public void randomClients(){
 		List<Map.Entry<Integer, Integer>> entryList = new LinkedList<>(linkDemand.entrySet());
 		Collections.shuffle(entryList);
+		LinkedHashMap<Integer, Integer> tmp = new LinkedHashMap<>();
     	for(Map.Entry<Integer, Integer> entry: entryList)
-    		linkDemand.put(entry.getKey(), entry.getValue());
+    		tmp.put(entry.getKey(), entry.getValue());
+    	linkDemand = tmp;
 	}
 
 	/**
@@ -391,7 +395,6 @@ public class Graph {
     		List<PCF> optiPaths = new LinkedList<>();
     		PCF optPcf = null;
     		int cost = 0;
-    		
     		//linkedNode 连接的消费节点若购买流量，计算需要支付的最小费用
     		while(true){
     			optPcf = getOptPath(linkedNode);
@@ -510,7 +513,8 @@ public class Graph {
     		servers.remove(new Integer(src));
     	Map<Integer, LinkedList<Integer>> shortPaths = new HashMap<>();
     	int[] costs = new int[nodesNum];
-		dijkstra(src, unitCosts, shortPaths, costs);
+    	int[][] weights = initWeights();
+		dijkstra(src, weights, shortPaths, costs);
 		int minCost = MAX_VALUE;
 		int candidate = -1;
     	for(int server: servers){
@@ -536,7 +540,21 @@ public class Graph {
 		LinkedList<Integer> optPath = shortPaths.get(candidate);
 		return new PCF(optPath, minCost, calculatePathFlow(optPath));
 	}
-	
+    
+    private int[][] initWeights(){
+    	int[][] weights = new int[nodesNum][nodesNum];
+    	//初始化图中单位租用费用信息和最大流量信息。不存在的链路单位租用费用设置为最大值，最大流量设置为0
+    	for(int i=0; i<nodesNum; i++){
+    		for(int j=0; j<nodesNum; j++){
+    			if(this.bandWidths[i][j] == 0){//没有对应的边
+    				weights[j][i] = MAX_VALUE;
+    			}else{
+    				weights[j][i]  =this.unitCosts[i][j];
+    			}
+    		}
+    	}
+    	return weights;
+    }
 	//TODO 需要删除
 	public int[][] getFlows(){
 		int[][] flow = new int[nodesNum][nodesNum];
@@ -573,7 +591,7 @@ public class Graph {
 	 * @param unitCosts
 	 */
 	private void dijkstra(int src, int[][] weights, Map<Integer, LinkedList<Integer>> shortPaths, int[] unitCosts){
-    	int nodesNum = weights.length;
+		int nodesNum = weights.length;
     	boolean isVisited[] = new boolean[nodesNum];//标记节点最短距离是否求出
     	//初始化节点 src 到其他节点的距离为无穷大
     	for(int i=0; i<unitCosts.length; i++){
@@ -660,7 +678,7 @@ public class Graph {
 	private void initMCMF(int[][] cost, int[][] cap, int nodesNum){
 		for(int i=0; i<nodesNum-2; i++){
 			for(int j=0; j<nodesNum-2; j++){
-				cost[i][j] = unitCostsBak[i][j];
+				cost[i][j] = unitCosts[i][j];
 				cap[i][j] =  bandWidthsBak[i][j];
 			}
 		}

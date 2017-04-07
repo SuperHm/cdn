@@ -23,7 +23,6 @@ public class Deploy{
     	readEdges(graphContent, graph);
     	readClients(graphContent, graph);
     	graph.setUnitcostsOfZeroBnadWidth();
-    	
     	if(graph.nodesNum < 200){
     		timeLimit = 65*1000;
     	}else if(graph.nodesNum <400){
@@ -50,7 +49,6 @@ public class Deploy{
     		int currCost = result.sec;    	
 //    		for(int server: optServers)
 //    			nodeCount[server]++;
-    		
     		if(currCost < miniCost){
     			optServers = graph.getServers();
     			miniCost = currCost;
@@ -58,7 +56,6 @@ public class Deploy{
 //    			for(PCF pcf: paths)
 //        			graph.plusNodeFlow(pcf);
 //    			graph.updateServers();
-
     			graph.printServers();
         		System.out.println(miniCost);    
     		}else {
@@ -66,9 +63,8 @@ public class Deploy{
 			}
     		if(System.currentTimeMillis() - startTime > timeLimit-eachTime)
     			break;
-	    	graph.recover();
+	    	graph.reset();
 	    	graph.simulateGame();
-
     	}
     	paths = graph.getPaths(optFlows);
     	return new String[]{paths.size()+"", graph.print(paths, optServers)};
