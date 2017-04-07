@@ -644,19 +644,19 @@ public class Graph {
 		initMCMF(cost, cap, capBak, N);
 		int[] pre = new int[N];
 		int totalFlow = 0;
-		while(SPFA(pre, cap, inverseCap, cost)){
+		while(SPFA(pre, cap, inverseCap, cost, N)){
 			printPath(pre);
 			int flow = Graph.MAX_VALUE;
-			for(int i=nodesNum-1; i!=nodesNum-2; i=pre[i]){
+			for(int i=N-1; i!=N-2; i=pre[i]){
 				if(inverseCap[pre[i]][i] == 0)
 					flow = Math.min(flow, cap[pre[i]][i]);
 				else
 					flow = Math.min(flow, inverseCap[pre[i]][i]);
 			}
-			for(int i=nodesNum-1; i!=nodesNum-2; i=pre[i]){
+			for(int i=N-1; i!=N-2; i=pre[i]){
 				if(inverseCap[pre[i]][i] == 0){
 					cap[pre[i]][i] -= flow;
-					if(pre[i] != nodesNum-2 && i != nodesNum-1){
+					if(pre[i] != N-2 && i != N-1){
 						inverseCap[i][pre[i]] += flow;
 					}
 				}else {
@@ -673,8 +673,8 @@ public class Graph {
 			}
 		}
 				
-		for(int i=0; i<nodesNum; i++){
-			for(int j=0; j<nodesNum; j++){
+		for(int i=0; i<N; i++){
+			for(int j=0; j<N; j++){
 				totalCost += cost[i][j] * flows[i][j];
 			}
 		}
@@ -686,7 +686,7 @@ public class Graph {
 		int src = pre.length-2;
 		int des = pre.length-1;
 		StringBuffer sb = new StringBuffer();
-		for(int i = des; pre[i]!=src; i=pre[i])
+		for(int i = des; i !=src; i=pre[i])
 			sb.append(i+" ");
 		System.out.println(sb.toString());
 	}
@@ -725,7 +725,7 @@ public class Graph {
 			cost[entry.getKey()][nodesNum-1] = 0;
 		}
 	}
-	public boolean SPFA(int[] pre, int[][] cap, int[][] inverseCap, int[][] cost){
+	public boolean SPFA(int[] pre, int[][] cap, int[][] inverseCap, int[][] cost, int nodesNum){
 		boolean[] vis = new boolean[nodesNum];
 		int[] dis = new int[nodesNum];
 		LinkedList<Integer> list = new LinkedList<>();
